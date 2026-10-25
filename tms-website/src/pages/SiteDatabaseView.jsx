@@ -63,11 +63,13 @@ export default function SiteDatabaseView() {
 
   // Helper to count tools per site from actual live tools state
   const getToolCountForSite = (siteId) => {
-    return tools.filter((t) => t.siteId === siteId).length;
+    const siteObj = sites.find((s) => s.id === siteId);
+    return tools.filter((t) => t.siteId === siteId || (siteObj && t.siteName === siteObj.name) || (siteObj && t.siteName?.toLowerCase() === siteObj.name.toLowerCase())).length;
   };
 
   const getActiveCheckedOutForSite = (siteId) => {
-    return tools.filter((t) => t.siteId === siteId && t.status === "Checked Out").length;
+    const siteObj = sites.find((s) => s.id === siteId);
+    return tools.filter((t) => (t.siteId === siteId || (siteObj && t.siteName === siteObj.name) || (siteObj && t.siteName?.toLowerCase() === siteObj.name.toLowerCase())) && t.status === "Checked Out").length;
   };
 
   return (

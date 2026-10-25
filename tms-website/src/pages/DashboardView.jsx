@@ -20,7 +20,7 @@ import {
 import BarcodeModal from "../components/BarcodeModal";
 
 export default function DashboardView() {
-  const { tools, sites, movements, inspections, setActiveTab } = useApp();
+  const { tools, sites, movements, inspections, setActiveTab, setSelectedSiteFilter, setGlobalSearch } = useApp();
   const [selectedToolForBarcode, setSelectedToolForBarcode] = useState(null);
 
   // Compute live statistics
@@ -33,6 +33,11 @@ export default function DashboardView() {
 
   const availabilityRate = totalTools > 0 ? Math.round((availableTools.length / totalTools) * 100) : 0;
   const utilizationRate = totalTools > 0 ? Math.round((checkedOutTools.length / totalTools) * 100) : 0;
+
+  // Live tool count per site calculated directly from active tools database
+  const getSiteToolCount = (site) => {
+    return tools.filter((t) => t.siteId === site.id || t.siteName === site.name || (t.siteName && t.siteName.toLowerCase() === site.name.toLowerCase())).length;
+  };
 
   // Recent 5 movements
   const recentMovements = movements.slice(0, 5);
@@ -470,39 +475,47 @@ export default function DashboardView() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {sites.map((site) => (
-              <div
-                key={site.id}
-                onClick={() => setActiveTab("sites-db")}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "var(--radius-sm)",
-                  backgroundColor: "var(--bg-surface-elevated)",
-                  border: "1px solid var(--border-subtle)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  cursor: "pointer",
-                  transition: "border-color var(--transition-fast)"
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "0.875rem" }}>{site.name}</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
-                    PIC: {site.pic} • {site.region}
+            {sites.map((site) => {
+              const liveToolCount = getSiteToolCount(site);
+              return (
+                <div
+                  key={site.id}
+                  onClick={() => {
+                    setSelectedSiteFilter(site.id);
+                    setGlobalSearch("");
+                    setActiveTab("tools-db");
+                  }}
+                  title={`Klik untuk melihat ${liveToolCount} tools di ${site.name} pada Tools Database`}
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "var(--radius-sm)",
+                    backgroundColor: "var(--bg-surface-elevated)",
+                    border: "1px solid var(--border-subtle)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    cursor: "pointer",
+                    transition: "border-color var(--transition-fast)"
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "0.875rem" }}>{site.name}</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                      PIC: {site.pic} • {site.region}
+                    </div>
                   </div>
-                </div>
 
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--atz-cyan)" }}>
-                    {site.activeToolsCount} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-muted)" }}>tools</span>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--atz-cyan)" }}>
+                      {liveToolCount} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-muted)" }}>tools</span>
+                    </div>
+                    <span className="status-pill status-available" style={{ fontSize: "0.65rem", padding: "1px 6px" }}>
+                      {site.status}
+                    </span>
                   </div>
-                  <span className="status-pill status-available" style={{ fontSize: "0.65rem", padding: "1px 6px" }}>
-                    {site.status}
-                  </span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

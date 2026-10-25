@@ -37,7 +37,7 @@ export default function AnalyticsView() {
 
   // Site Distribution
   const siteStats = sites.map((site) => {
-    const siteTools = tools.filter((t) => t.siteId === site.id);
+    const siteTools = tools.filter((t) => t.siteId === site.id || t.siteName === site.name || (t.siteName && t.siteName.toLowerCase() === site.name.toLowerCase()));
     const checkedOutCount = siteTools.filter((t) => t.status === "Checked Out").length;
     return {
       name: site.name,
