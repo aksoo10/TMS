@@ -527,8 +527,8 @@ export default function ToolsDatabaseView() {
                       {/* Site */}
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.825rem" }}>
-                          <MapPin size={13} color="var(--text-muted)" />
-                          <span>{tool.siteName.split(" ")[0]}</span>
+                          <MapPin size={13} color="var(--atz-cyan)" />
+                          <span style={{ fontWeight: 600 }}>{tool.siteName}</span>
                         </div>
                         <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{tool.binLocation}</div>
                       </td>
@@ -650,7 +650,7 @@ export default function ToolsDatabaseView() {
                 >
                   <div>
                     <span style={{ color: "var(--text-muted)" }}>Lokasi:</span>
-                    <div style={{ fontWeight: 600 }}>{tool.siteName.split(" ")[0]}</div>
+                    <div style={{ fontWeight: 600 }}>{tool.siteName}</div>
                   </div>
                   <div>
                     <span style={{ color: "var(--text-muted)" }}>Storage Bin:</span>

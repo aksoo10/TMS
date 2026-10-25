@@ -257,7 +257,7 @@ export default function InspectionView() {
                           </span>
                         </td>
                         <td style={{ fontWeight: 600 }}>{tool.name}</td>
-                        <td>{tool.siteName.split(" ")[0]}</td>
+                        <td>{tool.siteName}</td>
                         <td>
                           <span
                             className="status-pill"

@@ -459,7 +459,7 @@ export default function ToolsRegisterView() {
                 </div>
                 <div>
                   <span style={{ color: "#777" }}>Site:</span>
-                  <div style={{ fontWeight: 600 }}>{selectedSite.name.split(" ")[0]}</div>
+                  <div style={{ fontWeight: 600 }}>{selectedSite.name}</div>
                 </div>
                 <div>
                   <span style={{ color: "#777" }}>Bin:</span>

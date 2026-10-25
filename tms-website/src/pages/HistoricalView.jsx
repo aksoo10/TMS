@@ -350,7 +350,7 @@ export default function HistoricalView() {
                     </td>
 
                     <td style={{ fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                      {log.site.split(" ")[0]}
+                      {log.site}
                     </td>
 
                     <td style={{ fontSize: "0.825rem", color: "var(--text-primary)" }}>

@@ -75,7 +75,7 @@ export default function BarcodeModal({ tool, onClose }) {
                 </div>
                 <div>
                   <span style={{ color: "#777" }}>Base Site:</span>
-                  <div style={{ fontWeight: 600 }}>{tool.siteName ? tool.siteName.split(" ")[0] : "ISC Depot"}</div>
+                  <div style={{ fontWeight: 600 }}>{tool.siteName || "Site ISC"}</div>
                 </div>
                 <div>
                   <span style={{ color: "#777" }}>Calib Due:</span>

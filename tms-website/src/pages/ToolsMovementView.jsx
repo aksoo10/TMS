@@ -316,11 +316,11 @@ export default function ToolsMovementView() {
                         <td>
                           <div style={{ fontSize: "0.78rem" }}>
                             <span style={{ color: "var(--text-muted)" }}>Dari: </span>
-                            <strong>{mov.fromSite.split(" ")[0]}</strong>
+                            <strong>{mov.fromSite}</strong>
                           </div>
                           <div style={{ fontSize: "0.78rem" }}>
                             <span style={{ color: "var(--text-muted)" }}>Ke: </span>
-                            <strong style={{ color: "var(--atz-cyan)" }}>{mov.toSite.split(" ")[0]}</strong>
+                            <strong style={{ color: "var(--atz-cyan)" }}>{mov.toSite}</strong>
                           </div>
                         </td>
 
@@ -421,7 +421,7 @@ export default function ToolsMovementView() {
                   <option value="">-- Pilih dari {availableTools.length} tools yang siap/tersedia --</option>
                   {availableTools.map((t) => (
                     <option key={t.id} value={t.id}>
-                      [{t.code}] {t.name} (Lokasi: {t.siteName.split(" ")[0]} - {t.binLocation})
+                      [{t.code}] {t.name} (Lokasi: {t.siteName} - {t.binLocation})
                     </option>
                   ))}
                 </select>
