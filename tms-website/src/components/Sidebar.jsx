@@ -18,13 +18,27 @@ import {
 } from "lucide-react";
 
 export default function Sidebar() {
-  const { activeTab, setActiveTab, tools, sites, movements, inspections, logout, setSelectedSiteFilter } = useApp();
+  const {
+    activeTab,
+    setActiveTab,
+    tools,
+    sites,
+    movements,
+    inspections,
+    logout,
+    setSelectedSiteFilter,
+    currentUser,
+    isSuperAdmin,
+    isItemInUserScope
+  } = useApp();
   const [collapsed, setCollapsed] = useState(false);
 
-  // Compute live badge counts
-  const availableCount = tools.filter((t) => t.status === "Available").length;
-  const checkedOutCount = tools.filter((t) => t.status === "Checked Out").length;
-  const inspectionNeeded = tools.filter((t) => t.calibrationStatus === "Due Soon" || t.status === "In Inspection").length;
+  // Compute live badge counts according to user scope
+  const scopedTools = isSuperAdmin ? tools : tools.filter((t) => isItemInUserScope(t.siteId, t.siteName));
+  const availableCount = scopedTools.filter((t) => t.status === "Available").length;
+  const checkedOutCount = scopedTools.filter((t) => t.status === "Checked Out").length;
+  const inspectionNeeded = scopedTools.filter((t) => t.calibrationStatus === "Due Soon" || t.status === "In Inspection").length;
+  const sitesCount = isSuperAdmin ? sites.length : 1;
 
   const navItems = [
     {
@@ -38,7 +52,7 @@ export default function Sidebar() {
       id: "tools-db",
       label: "Tools Database",
       icon: Database,
-      badge: tools.length,
+      badge: scopedTools.length,
       badgeColor: "var(--atz-cyan)",
       desc: "Master Katalog & Barcode"
     },
@@ -46,9 +60,9 @@ export default function Sidebar() {
       id: "sites-db",
       label: "Site Database",
       icon: MapPin,
-      badge: sites.length,
+      badge: sitesCount,
       badgeColor: "var(--color-purple)",
-      desc: "Lokasi & Plant Operasional"
+      desc: isSuperAdmin ? "6 Lokasi Plant (Pusat)" : `${currentUser?.site || "Site Lokal"}`
     },
     {
       id: "tools-register",
@@ -148,7 +162,7 @@ export default function Sidebar() {
               key={item.id}
               onClick={() => {
                 if (item.id === "tools-db") {
-                  setSelectedSiteFilter("ALL");
+                  setSelectedSiteFilter(isSuperAdmin ? "ALL" : (currentUser?.siteId || currentUser?.site));
                 }
                 setActiveTab(item.id);
               }}

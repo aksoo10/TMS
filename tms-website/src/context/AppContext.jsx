@@ -113,9 +113,10 @@ export function AppProvider({ children }) {
     if (saved) {
       try {
         const u = JSON.parse(saved);
-        if (!u.site || !u.site.startsWith("Site ")) {
-          u.site = "Site ISC";
-        }
+        const matched = INITIAL_USERS.find(
+          (usr) => usr.id === u.id || usr.roleSlug === u.roleSlug || usr.role === u.role
+        );
+        if (matched) return matched;
         return u;
       } catch (e) {}
     }
@@ -124,6 +125,33 @@ export function AppProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem("andritz_tms_auth") !== "false";
   });
+
+  // Authorization & Multi-Site Scope: Only Super Admin can view all sites.
+  const isSuperAdmin = !currentUser || currentUser.roleSlug === "super-admin" || currentUser.site === "ALL";
+  const userSite = isSuperAdmin ? "ALL" : currentUser?.site;
+  const userSiteId = isSuperAdmin ? "ALL" : currentUser?.siteId;
+
+  const isItemInUserScope = (itemSiteId, itemSiteName) => {
+    if (isSuperAdmin) return true;
+    if (!currentUser?.site) return true;
+
+    // Check by ID
+    if (itemSiteId && currentUser.siteId && itemSiteId === currentUser.siteId) {
+      return true;
+    }
+    // Check by Name
+    if (itemSiteName && (itemSiteName === currentUser.site || itemSiteName.toLowerCase() === currentUser.site.toLowerCase())) {
+      return true;
+    }
+    // Check core site code
+    const normalize = (s) => (s || "").replace(/^site\s+/i, "").trim().toLowerCase();
+    const userNorm = normalize(currentUser.site);
+    const itemNorm = normalize(itemSiteName);
+    if (userNorm && itemNorm && userNorm === itemNorm) {
+      return true;
+    }
+    return false;
+  };
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -137,7 +165,9 @@ export function AppProvider({ children }) {
   const [globalSearch, setGlobalSearch] = useState("");
 
   // Site filter state for cross-view navigation
-  const [selectedSiteFilter, setSelectedSiteFilter] = useState("ALL");
+  const [selectedSiteFilter, setSelectedSiteFilter] = useState(() => {
+    return isSuperAdmin ? "ALL" : (currentUser?.siteId || "ALL");
+  });
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
@@ -261,6 +291,11 @@ export function AppProvider({ children }) {
   const login = (user) => {
     setCurrentUser(user);
     setIsAuthenticated(true);
+    if (user.roleSlug === "super-admin" || user.site === "ALL") {
+      setSelectedSiteFilter("ALL");
+    } else {
+      setSelectedSiteFilter(user.siteId || user.site);
+    }
     showToast("Login Berhasil", `Selamat datang, ${user.name} (${user.role})`, "success");
   };
 
@@ -269,13 +304,23 @@ export function AppProvider({ children }) {
     showToast("Logout", "Anda telah keluar dari sistem", "info");
   };
 
-  const switchRole = (roleName) => {
-    const matched = INITIAL_USERS.find((u) => u.role === roleName) || {
-      ...currentUser,
-      role: roleName
-    };
-    setCurrentUser(matched);
-    showToast("Peran Dialihkan", `Mode aktif: ${matched.role}`, "info");
+  const switchRole = (targetRoleOrId) => {
+    const matched = INITIAL_USERS.find(
+      (u) =>
+        u.id === targetRoleOrId ||
+        u.roleSlug === targetRoleOrId ||
+        u.role === targetRoleOrId ||
+        u.site === targetRoleOrId
+    );
+    if (matched) {
+      setCurrentUser(matched);
+      if (matched.roleSlug === "super-admin" || matched.site === "ALL") {
+        setSelectedSiteFilter("ALL");
+      } else {
+        setSelectedSiteFilter(matched.siteId || matched.site);
+      }
+      showToast("Peran Dialihkan", `Mode aktif: ${matched.role} (${matched.site})`, "info");
+    }
   };
 
   const toggleTheme = () => {
@@ -631,6 +676,11 @@ export function AppProvider({ children }) {
         setCurrentUser,
         isAuthenticated,
         setIsAuthenticated,
+        isSuperAdmin,
+        userSite,
+        userSiteId,
+        isItemInUserScope,
+        INITIAL_USERS,
         login,
         logout,
         switchRole,

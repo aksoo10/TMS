@@ -5,7 +5,12 @@ import {
   Bell,
   LogOut,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Globe2,
+  ChevronDown,
+  Shield,
+  MapPin
 } from "lucide-react";
 
 export default function Navbar() {
@@ -16,10 +21,14 @@ export default function Navbar() {
     setGlobalSearch,
     setActiveTab,
     movements,
-    inspections
+    inspections,
+    isSuperAdmin,
+    switchRole,
+    INITIAL_USERS
   } = useApp();
 
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
   // Compute urgent notifications
   const overdueMovements = movements.filter((m) => m.status === "Active");
@@ -96,10 +105,10 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Actions & Profile: Search Bar (White) next to Notification Bell */}
-      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-        {/* Global Quick Search (White background, positioned next to notification bell) */}
-        <div style={{ width: "320px", position: "relative" }}>
+      {/* Actions & Profile: Search Bar, Notifications, Site Scope Badge, User Profile */}
+      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        {/* Global Quick Search (White background) */}
+        <div style={{ width: "300px", position: "relative" }}>
           <Search
             size={16}
             style={{
@@ -135,11 +144,57 @@ export default function Navbar() {
           />
         </div>
 
+        {/* Site Scope Pill Badge */}
+        {isSuperAdmin ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 12px",
+              borderRadius: "20px",
+              backgroundColor: "rgba(0, 163, 224, 0.18)",
+              border: "1px solid rgba(0, 163, 224, 0.4)",
+              color: "var(--atz-cyan)",
+              fontSize: "0.76rem",
+              fontWeight: 700,
+              letterSpacing: "0.02em"
+            }}
+            title="Akses Super Admin: Menampilkan seluruh 6 site ANDRITZ"
+          >
+            <Globe2 size={13} />
+            <span>Semua Site (Super Admin)</span>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 12px",
+              borderRadius: "20px",
+              backgroundColor: "rgba(245, 158, 11, 0.18)",
+              border: "1px solid rgba(245, 158, 11, 0.45)",
+              color: "var(--color-warning)",
+              fontSize: "0.76rem",
+              fontWeight: 700,
+              letterSpacing: "0.02em"
+            }}
+            title={`Akses Terbatas: Hanya data ${currentUser?.site}`}
+          >
+            <Lock size={12} />
+            <span>{currentUser?.site || "Site Admin"}</span>
+          </div>
+        )}
+
         {/* Notification Bell */}
         <div style={{ position: "relative" }}>
           <button
             className="btn btn-secondary btn-icon"
-            onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+            onClick={() => {
+              setShowNotifDropdown(!showNotifDropdown);
+              setShowRoleDropdown(false);
+            }}
             title="Notifikasi & Peringatan Fleet"
           >
             <Bell size={17} />
@@ -227,36 +282,160 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* User Avatar & Logout */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "6px" }}>
-          <div
+        {/* Quick Role & Site Switcher Dropdown */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => {
+              setShowRoleDropdown(!showRoleDropdown);
+              setShowNotifDropdown(false);
+            }}
             style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              backgroundColor: "var(--atz-navy-700)",
-              border: "2px solid var(--atz-cyan)",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              color: "#ffffff",
-              fontWeight: "700",
-              fontSize: "0.85rem",
-              fontFamily: "var(--font-heading)"
+              gap: "8px",
+              padding: "4px 8px 4px 6px",
+              borderRadius: "20px",
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(255, 255, 255, 0.16)",
+              cursor: "pointer",
+              color: "#FFFFFF"
             }}
+            title="Klik untuk beralih Admin Site / Super Admin"
           >
-            {currentUser?.avatar || "OP"}
-          </div>
-
-          <button
-            className="btn btn-secondary btn-icon"
-            onClick={logout}
-            title="Keluar / Ganti Akun"
-            style={{ color: "var(--color-danger)" }}
-          >
-            <LogOut size={16} />
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                backgroundColor: isSuperAdmin ? "var(--atz-cyan)" : (currentUser?.badgeColor || "#10B981"),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffffff",
+                fontWeight: "700",
+                fontSize: "0.75rem",
+                fontFamily: "var(--font-heading)"
+              }}
+            >
+              {currentUser?.avatar || "OP"}
+            </div>
+            <div style={{ textAlign: "left", lineHeight: "1.2" }}>
+              <div style={{ fontSize: "0.76rem", fontWeight: 700, whiteSpace: "nowrap" }}>
+                {currentUser?.name?.split(" ")[0] || "User"}
+              </div>
+              <div style={{ fontSize: "0.66rem", color: "#94A3B8", whiteSpace: "nowrap" }}>
+                {isSuperAdmin ? "Super Admin" : currentUser?.site}
+              </div>
+            </div>
+            <ChevronDown size={14} color="#94A3B8" />
           </button>
+
+          {showRoleDropdown && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "44px",
+                width: "290px",
+                backgroundColor: "var(--bg-surface)",
+                border: "1px solid var(--border-medium)",
+                borderRadius: "var(--radius-md)",
+                boxShadow: "var(--shadow-lg)",
+                padding: "12px",
+                zIndex: 200
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: "var(--text-muted)",
+                  paddingBottom: "8px",
+                  borderBottom: "1px solid var(--border-subtle)",
+                  marginBottom: "8px"
+                }}
+              >
+                Ganti Akun Demo (Hak Akses Site)
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                {INITIAL_USERS?.map((usr) => {
+                  const isCurrent = currentUser?.id === usr.id;
+                  const isSuper = usr.roleSlug === "super-admin";
+                  return (
+                    <div
+                      key={usr.id}
+                      onClick={() => {
+                        switchRole(usr.id);
+                        setShowRoleDropdown(false);
+                      }}
+                      style={{
+                        padding: "7px 10px",
+                        borderRadius: "6px",
+                        backgroundColor: isCurrent ? "var(--bg-surface-active)" : "transparent",
+                        border: isCurrent ? "1px solid var(--atz-cyan)" : "1px solid transparent",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        transition: "background var(--transition-fast)"
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCurrent) e.currentTarget.style.backgroundColor = "var(--bg-surface-elevated)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCurrent) e.currentTarget.style.backgroundColor = "transparent";
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            backgroundColor: usr.badgeColor || (isSuper ? "#00A3E0" : "#10B981")
+                          }}
+                        />
+                        <div>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: isCurrent ? "var(--atz-cyan)" : "var(--text-primary)" }}>
+                            {usr.role}
+                          </div>
+                          <div style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
+                            {usr.name} • {usr.site}
+                          </div>
+                        </div>
+                      </div>
+                      {isCurrent && <CheckCircle2 size={14} color="var(--atz-cyan)" />}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--border-subtle)", marginTop: "8px", paddingTop: "8px" }}>
+                <button
+                  onClick={logout}
+                  className="btn btn-secondary"
+                  style={{ width: "100%", justifyContent: "center", gap: "6px", fontSize: "0.76rem", color: "var(--color-danger)" }}
+                >
+                  <LogOut size={13} />
+                  Keluar ke Halaman Login
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Logout Button */}
+        <button
+          className="btn btn-secondary btn-icon"
+          onClick={logout}
+          title="Keluar / Ganti Akun"
+          style={{ color: "var(--color-danger)" }}
+        >
+          <LogOut size={16} />
+        </button>
       </div>
     </header>
   );

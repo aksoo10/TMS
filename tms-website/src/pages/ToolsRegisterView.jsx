@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import {
   PlusCircle,
@@ -12,13 +12,15 @@ import {
   Wrench,
   ArrowRight,
   RefreshCw,
-  Printer
+  Printer,
+  Lock,
+  Globe2
 } from "lucide-react";
 import BarcodeModal from "../components/BarcodeModal";
 import BarcodeRenderer from "../components/BarcodeRenderer";
 
 export default function ToolsRegisterView() {
-  const { addTool, sites, setActiveTab } = useApp();
+  const { addTool, sites, setActiveTab, currentUser, isSuperAdmin } = useApp();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -29,7 +31,7 @@ export default function ToolsRegisterView() {
     materialNo: `MAT-88${Math.floor(10000 + Math.random() * 89999)}`,
     serialNo: `SN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
     barcode: `8990142${Math.floor(10000 + Math.random() * 90000)}`,
-    siteId: sites[0]?.id || "SITE-IKPP",
+    siteId: !isSuperAdmin ? (currentUser?.siteId || sites[0]?.id || "SITE-IKPP") : (sites[0]?.id || "SITE-IKPP"),
     binLocation: "RACK-A2-01",
     status: "Available",
     condition: "Good",
@@ -40,6 +42,13 @@ export default function ToolsRegisterView() {
     nextCalibrationDate: "2027-04-25",
     specs: "Alat hidrolik presisi tinggi standar industri andritz dengan sertifikasi kalibrasi pabrikan."
   });
+
+  // Keep siteId synced to currentUser if site admin
+  useEffect(() => {
+    if (!isSuperAdmin && currentUser?.siteId) {
+      setFormData((prev) => ({ ...prev, siteId: currentUser.siteId }));
+    }
+  }, [isSuperAdmin, currentUser]);
 
   const [registeredTool, setRegisteredTool] = useState(null);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
@@ -353,17 +362,50 @@ export default function ToolsRegisterView() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <div className="form-group">
                 <label className="form-label">Base Site (Lokasi Induk)</label>
-                <select
-                  className="form-select"
-                  value={formData.siteId}
-                  onChange={(e) => setFormData({ ...formData, siteId: e.target.value })}
-                >
-                  {sites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                {isSuperAdmin ? (
+                  <select
+                    className="form-select"
+                    value={formData.siteId}
+                    onChange={(e) => setFormData({ ...formData, siteId: e.target.value })}
+                  >
+                    {sites.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={currentUser?.site || "Site Anda"}
+                      readOnly
+                      style={{
+                        backgroundColor: "var(--bg-surface-elevated)",
+                        cursor: "not-allowed",
+                        fontWeight: 600,
+                        color: "var(--color-warning)"
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        right: "12px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: "0.72rem",
+                        color: "var(--color-warning)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontWeight: 600
+                      }}
+                    >
+                      <Lock size={12} /> Terkunci (Admin Site)
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">

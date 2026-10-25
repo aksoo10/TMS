@@ -21,7 +21,9 @@ import {
   Grid,
   List,
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  Lock,
+  Globe2
 } from "lucide-react";
 import BarcodeModal from "../components/BarcodeModal";
 
@@ -36,21 +38,30 @@ export default function ToolsDatabaseView() {
     setGlobalSearch,
     currentUser,
     selectedSiteFilter,
-    setSelectedSiteFilter
+    setSelectedSiteFilter,
+    isSuperAdmin,
+    isItemInUserScope
   } = useApp();
 
   const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [siteFilter, setSiteFilter] = useState(selectedSiteFilter || "ALL");
+  const [siteFilter, setSiteFilter] = useState(() => {
+    if (!isSuperAdmin) {
+      return currentUser?.siteId || currentUser?.site || "ALL";
+    }
+    return selectedSiteFilter || "ALL";
+  });
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [calibrationFilter, setCalibrationFilter] = useState("ALL");
   const [viewMode, setViewMode] = useState("table"); // 'table' or 'grid'
 
-  // Sync site filter from cross-view navigation
+  // Sync site filter from cross-view navigation or user changes
   useEffect(() => {
-    if (selectedSiteFilter) {
+    if (!isSuperAdmin) {
+      setSiteFilter(currentUser?.siteId || currentUser?.site || "ALL");
+    } else if (selectedSiteFilter) {
       setSiteFilter(selectedSiteFilter);
     }
-  }, [selectedSiteFilter]);
+  }, [selectedSiteFilter, isSuperAdmin, currentUser]);
 
   // Modals state
   const [barcodeTool, setBarcodeTool] = useState(null);
@@ -60,8 +71,13 @@ export default function ToolsDatabaseView() {
   // Extract distinct categories
   const categories = ["ALL", ...new Set(tools.map((t) => t.category))];
 
-  // Filtering Logic
+  // Filtering Logic with Multi-Site Scope Isolation
   const filteredTools = tools.filter((tool) => {
+    // Crucial: Only Super Admin can see tools across all sites. Site Admins only see their designated site!
+    if (!isSuperAdmin && !isItemInUserScope(tool.siteId, tool.siteName)) {
+      return false;
+    }
+
     const query = globalSearch.toLowerCase().trim();
     const matchesSearch =
       query === "" ||
@@ -74,7 +90,7 @@ export default function ToolsDatabaseView() {
       (tool.siteName && tool.siteName.toLowerCase().includes(query));
 
     const matchesCategory = categoryFilter === "ALL" || tool.category === categoryFilter;
-    const matchesSite = siteFilter === "ALL" || tool.siteId === siteFilter;
+    const matchesSite = !isSuperAdmin || siteFilter === "ALL" || tool.siteId === siteFilter;
     const matchesStatus = statusFilter === "ALL" || tool.status === statusFilter;
     const matchesCalibration = calibrationFilter === "ALL" || tool.calibrationStatus === calibrationFilter;
 
@@ -296,6 +312,63 @@ export default function ToolsDatabaseView() {
         </div>
       </div>
 
+      {/* Multi-Site Authorization Scope Alert Banner */}
+      {!isSuperAdmin ? (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "18px",
+            fontSize: "0.825rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Lock size={16} color="var(--color-warning)" />
+            <span>
+              <strong style={{ color: "var(--color-warning)" }}>Akses Terisolasi Admin Site ({currentUser?.site}):</strong> Anda hanya dapat melihat dan mengelola tools di <strong>{currentUser?.site}</strong>. Sesuai kebijakan keamanan ANDRITZ, hanya <strong>Super Admin</strong> yang memiliki hak akses melihat seluruh site.
+            </span>
+          </div>
+          <span className="status-pill status-checked-out" style={{ fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+            {filteredTools.length} Tools di Site Ini
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(0, 163, 224, 0.1)",
+            border: "1px solid rgba(0, 163, 224, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "18px",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Globe2 size={15} color="var(--atz-cyan)" />
+            <span>
+              <strong style={{ color: "var(--atz-cyan)" }}>Akses Penuh Super Admin:</strong> Anda memiliki hak akses global untuk memantau seluruh 6 site ANDRITZ (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+            </span>
+          </div>
+          <span className="status-pill status-available" style={{ fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+            {tools.length} Total Tools (Global)
+          </span>
+        </div>
+      )}
+
       {/* Filter and Search Controls Bar */}
       <div
         className="card"
@@ -363,24 +436,45 @@ export default function ToolsDatabaseView() {
             </select>
           </div>
 
-          {/* Site Dropdown */}
+          {/* Site Dropdown: Locked to User Site for Site Admins, Full selection for Super Admin */}
           <div style={{ flex: "0 1 210px" }}>
-            <select
-              className="form-select"
-              value={siteFilter}
-              onChange={(e) => {
-                setSiteFilter(e.target.value);
-                setSelectedSiteFilter(e.target.value);
-              }}
-              style={{ height: "40px", fontSize: "0.85rem" }}
-            >
-              <option value="ALL">Lokasi: Semua Site</option>
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            {isSuperAdmin ? (
+              <select
+                className="form-select"
+                value={siteFilter}
+                onChange={(e) => {
+                  setSiteFilter(e.target.value);
+                  setSelectedSiteFilter(e.target.value);
+                }}
+                style={{ height: "40px", fontSize: "0.85rem" }}
+              >
+                <option value="ALL">Lokasi: Semua Site (Pusat)</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div
+                style={{
+                  height: "40px",
+                  fontSize: "0.825rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "0 12px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "rgba(245, 158, 11, 0.12)",
+                  border: "1px solid rgba(245, 158, 11, 0.4)",
+                  color: "var(--color-warning)"
+                }}
+                title={`Akses terkunci khusus ${currentUser?.site}`}
+              >
+                <Lock size={13} />
+                <span style={{ fontWeight: 700 }}>{currentUser?.site || "Site Anda"}</span>
+              </div>
+            )}
           </div>
 
           {/* Status Dropdown */}

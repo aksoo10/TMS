@@ -13,11 +13,24 @@ import {
   CheckCircle2,
   X,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Lock,
+  Globe2
 } from "lucide-react";
 
 export default function SiteDatabaseView() {
-  const { sites, addSite, updateSite, tools, setActiveTab, setGlobalSearch, setSelectedSiteFilter } = useApp();
+  const {
+    sites,
+    addSite,
+    updateSite,
+    tools,
+    setActiveTab,
+    setGlobalSearch,
+    setSelectedSiteFilter,
+    currentUser,
+    isSuperAdmin,
+    isItemInUserScope
+  } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSite, setEditingSite] = useState(null);
@@ -34,7 +47,12 @@ export default function SiteDatabaseView() {
     status: "Operational"
   });
 
-  const filteredSites = sites.filter((site) => {
+  // Authorization filter: Super Admin sees all sites, Site Admin only sees their designated site
+  const accessibleSites = isSuperAdmin
+    ? sites
+    : sites.filter((site) => isItemInUserScope(site.id, site.name));
+
+  const filteredSites = accessibleSites.filter((site) => {
     const q = searchTerm.toLowerCase();
     return (
       site.name.toLowerCase().includes(q) ||
@@ -80,7 +98,7 @@ export default function SiteDatabaseView() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          marginBottom: "24px",
+          marginBottom: "20px",
           flexWrap: "wrap",
           gap: "16px"
         }}
@@ -109,11 +127,70 @@ export default function SiteDatabaseView() {
           </p>
         </div>
 
-        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-          <PlusCircle size={16} />
-          <span>Tambah Site Baru</span>
-        </button>
+        {isSuperAdmin && (
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <PlusCircle size={16} />
+            <span>Tambah Site Baru</span>
+          </button>
+        )}
       </div>
+
+      {/* Multi-Site Access Scope Alert Banner */}
+      {!isSuperAdmin ? (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.825rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Lock size={16} color="var(--color-warning)" />
+            <span>
+              <strong style={{ color: "var(--color-warning)" }}>Hak Akses Terbatas Admin Site ({currentUser?.site}):</strong> Anda hanya dapat melihat lokasi dan inventaris <strong>{currentUser?.site}</strong>. Sesuai kebijakan keamanan, <strong>canya Super Admin yang berhak melihat seluruh 6 site ANDRITZ</strong>.
+            </span>
+          </div>
+          <span className="status-pill status-checked-out" style={{ fontSize: "0.72rem" }}>
+            1 Site Diakses
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(0, 163, 224, 0.1)",
+            border: "1px solid rgba(0, 163, 224, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Globe2 size={15} color="var(--atz-cyan)" />
+            <span>
+              <strong style={{ color: "var(--atz-cyan)" }}>Akses Terpusat Super Admin:</strong> Anda memiliki akses penuh ke seluruh <strong>6 site operasional ANDRITZ</strong> (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+            </span>
+          </div>
+          <span className="status-pill status-available" style={{ fontSize: "0.72rem" }}>
+            6 dari 6 Site Aktif
+          </span>
+        </div>
+      )}
 
       {/* Search & Overview Statistics */}
       <div

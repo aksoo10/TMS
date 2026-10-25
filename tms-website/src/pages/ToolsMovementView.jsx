@@ -19,11 +19,25 @@ import {
   Wrench,
   Download,
   Edit,
-  Trash2
+  Trash2,
+  Lock,
+  Globe2
 } from "lucide-react";
 
 export default function ToolsMovementView() {
-  const { tools, sites, movements, checkOutTool, checkInTool, transferTool, updateMovement, deleteMovement, currentUser } = useApp();
+  const {
+    tools,
+    sites,
+    movements,
+    checkOutTool,
+    checkInTool,
+    transferTool,
+    updateMovement,
+    deleteMovement,
+    currentUser,
+    isSuperAdmin,
+    isItemInUserScope
+  } = useApp();
 
   const [activeSubTab, setActiveSubTab] = useState("all-movements"); // 'all-movements', 'checkout-form', 'transfer-form'
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,18 +69,27 @@ export default function ToolsMovementView() {
     notes: "Relokasi armada tools untuk support project overhaul site"
   });
 
-  // Tools available for checkout
-  const availableTools = tools.filter((t) => t.status === "Available");
+  // Tools available for checkout (scoped to user's site for Site Admins)
+  const availableTools = tools.filter(
+    (t) => t.status === "Available" && (isSuperAdmin || isItemInUserScope(t.siteId, t.siteName))
+  );
 
-  // Filtered movements
+  // Filtered movements (scoped to user's site for Site Admins)
   const filteredMovements = movements.filter((m) => {
+    if (!isSuperAdmin) {
+      const matchFrom = isItemInUserScope(null, m.fromSite);
+      const matchTo = isItemInUserScope(null, m.toSite);
+      if (!matchFrom && !matchTo) return false;
+    }
+
     const q = searchTerm.toLowerCase();
     const matchesSearch =
       m.toolCode.toLowerCase().includes(q) ||
       m.toolName.toLowerCase().includes(q) ||
       m.borrowerName.toLowerCase().includes(q) ||
       m.workOrder.toLowerCase().includes(q) ||
-      m.toSite.toLowerCase().includes(q);
+      m.toSite.toLowerCase().includes(q) ||
+      (m.fromSite && m.fromSite.toLowerCase().includes(q));
 
     const matchesStatus = statusFilter === "ALL" || m.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -189,6 +212,63 @@ export default function ToolsMovementView() {
           </button>
         </div>
       </div>
+
+      {/* Multi-Site Access Scope Alert Banner */}
+      {!isSuperAdmin ? (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.825rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Lock size={16} color="var(--color-warning)" />
+            <span>
+              <strong style={{ color: "var(--color-warning)" }}>Scope Logistik Admin Site ({currentUser?.site}):</strong> Anda hanya melihat catatan peminjaman dan tools yang bersumber atau ditujukan ke <strong>{currentUser?.site}</strong>. Hanya <strong>Super Admin</strong> yang memiliki hak akses melihat seluruh logistik 6 site.
+            </span>
+          </div>
+          <span className="status-pill status-checked-out" style={{ fontSize: "0.72rem" }}>
+            {filteredMovements.length} Pergerakan di Site Ini
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(0, 163, 224, 0.1)",
+            border: "1px solid rgba(0, 163, 224, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Globe2 size={15} color="var(--atz-cyan)" />
+            <span>
+              <strong style={{ color: "var(--atz-cyan)" }}>Monitoring Global Super Admin:</strong> Memantau pergerakan tools lintas seluruh 6 site ANDRITZ (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+            </span>
+          </div>
+          <span className="status-pill status-available" style={{ fontSize: "0.72rem" }}>
+            {movements.length} Total Pergerakan Global
+          </span>
+        </div>
+      )}
 
       {/* SubTab 1: All Movements Table & Active Borrowings */}
       {activeSubTab === "all-movements" && (

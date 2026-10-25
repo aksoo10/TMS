@@ -13,31 +13,38 @@ import {
   ArrowUpRight,
   Layers,
   Activity,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock,
+  Globe2
 } from "lucide-react";
 
 export default function AnalyticsView() {
-  const { tools, sites, movements, inspections } = useApp();
+  const { tools, sites, movements, inspections, currentUser, isSuperAdmin, isItemInUserScope } = useApp();
 
-  const totalTools = tools.length;
-  const availableTools = tools.filter((t) => t.status === "Available").length;
-  const checkedOutTools = tools.filter((t) => t.status === "Checked Out").length;
-  const maintenanceTools = tools.filter((t) => t.status === "Maintenance" || t.status === "Damaged").length;
+  const scopedTools = isSuperAdmin ? tools : tools.filter((t) => isItemInUserScope(t.siteId, t.siteName));
+  const scopedMovements = isSuperAdmin ? movements : movements.filter((m) => isItemInUserScope(null, m.fromSite) || isItemInUserScope(null, m.toSite));
+  const scopedInspections = isSuperAdmin ? inspections : inspections.filter((i) => isItemInUserScope(null, i.siteName));
+  const scopedSites = isSuperAdmin ? sites : sites.filter((s) => isItemInUserScope(s.id, s.name));
+
+  const totalTools = scopedTools.length;
+  const availableTools = scopedTools.filter((t) => t.status === "Available").length;
+  const checkedOutTools = scopedTools.filter((t) => t.status === "Checked Out").length;
+  const maintenanceTools = scopedTools.filter((t) => t.status === "Maintenance" || t.status === "Damaged").length;
 
   const utilizationRate = totalTools > 0 ? Math.round((checkedOutTools / totalTools) * 100) : 0;
   const availabilityRate = totalTools > 0 ? Math.round((availableTools / totalTools) * 100) : 0;
 
   // Category Breakdown
-  const categories = [...new Set(tools.map((t) => t.category))];
+  const categories = [...new Set(scopedTools.map((t) => t.category))];
   const categoryStats = categories.map((cat) => {
-    const count = tools.filter((t) => t.category === cat).length;
+    const count = scopedTools.filter((t) => t.category === cat).length;
     const percentage = totalTools > 0 ? Math.round((count / totalTools) * 100) : 0;
     return { name: cat, count, percentage };
   }).sort((a, b) => b.count - a.count);
 
   // Site Distribution
-  const siteStats = sites.map((site) => {
-    const siteTools = tools.filter((t) => t.siteId === site.id || t.siteName === site.name || (t.siteName && t.siteName.toLowerCase() === site.name.toLowerCase()));
+  const siteStats = scopedSites.map((site) => {
+    const siteTools = scopedTools.filter((t) => t.siteId === site.id || t.siteName === site.name || (t.siteName && t.siteName.toLowerCase() === site.name.toLowerCase()));
     const checkedOutCount = siteTools.filter((t) => t.status === "Checked Out").length;
     return {
       name: site.name,
@@ -48,8 +55,8 @@ export default function AnalyticsView() {
   }).sort((a, b) => b.total - a.total);
 
   // Inspection stats
-  const totalInspections = inspections.length;
-  const passedInspections = inspections.filter((i) => i.verdict === "Pass" || i.verdict === "Pass with Observation").length;
+  const totalInspections = scopedInspections.length;
+  const passedInspections = scopedInspections.filter((i) => i.verdict === "Pass" || i.verdict === "Pass with Observation").length;
   const complianceRate = totalInspections > 0 ? Math.round((passedInspections / totalInspections) * 100) : 100;
 
   return (
@@ -93,6 +100,63 @@ export default function AnalyticsView() {
           <span className="status-pill status-available">Live Engine Sync</span>
         </div>
       </div>
+
+      {/* Multi-Site Access Scope Alert Banner */}
+      {!isSuperAdmin ? (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.825rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Lock size={16} color="var(--color-warning)" />
+            <span>
+              <strong style={{ color: "var(--color-warning)" }}>Analitik Terisolasi Admin Site ({currentUser?.site}):</strong> Seluruh metrik utilisasi, ketersediaan, dan statistik kategori khusus merefleksikan <strong>{currentUser?.site}</strong>. Sesuai arsitektur keamanan, hanya <strong>Super Admin</strong> yang dapat mengakses analitik komparatif 6 site.
+            </span>
+          </div>
+          <span className="status-pill status-checked-out" style={{ fontSize: "0.72rem" }}>
+            {scopedTools.length} Tools di Site Ini
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(0, 163, 224, 0.1)",
+            border: "1px solid rgba(0, 163, 224, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Globe2 size={15} color="var(--atz-cyan)" />
+            <span>
+              <strong style={{ color: "var(--atz-cyan)" }}>Analitik Global Super Admin:</strong> Menghitung utilisasi dan agregasi armada di seluruh <strong>6 site operasional ANDRITZ</strong> (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+            </span>
+          </div>
+          <span className="status-pill status-available" style={{ fontSize: "0.72rem" }}>
+            Analisis Seluruh 6 Site Aktif
+          </span>
+        </div>
+      )}
 
       {/* High-Level Analytical KPI Cards */}
       <div

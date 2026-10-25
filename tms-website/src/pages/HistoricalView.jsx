@@ -17,16 +17,23 @@ import {
   Truck,
   Edit,
   Trash2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock,
+  Globe2
 } from "lucide-react";
 
 export default function HistoricalView() {
-  const { historical, sites } = useApp();
+  const { historical, sites, currentUser, isSuperAdmin, isItemInUserScope } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [eventTypeFilter, setEventTypeFilter] = useState("ALL");
   const [siteFilter, setSiteFilter] = useState("ALL");
 
   const filteredLogs = historical.filter((log) => {
+    // If site admin, only show logs relating to user's site
+    if (!isSuperAdmin && !isItemInUserScope(null, log.site)) {
+      return false;
+    }
+
     const q = searchTerm.toLowerCase();
     const matchesSearch =
       log.toolCode.toLowerCase().includes(q) ||
@@ -36,7 +43,7 @@ export default function HistoricalView() {
       log.site.toLowerCase().includes(q);
 
     const matchesType = eventTypeFilter === "ALL" || log.eventType === eventTypeFilter;
-    const matchesSite = siteFilter === "ALL" || log.site.toLowerCase().includes(siteFilter.toLowerCase());
+    const matchesSite = !isSuperAdmin || siteFilter === "ALL" || log.site.toLowerCase().includes(siteFilter.toLowerCase());
 
     return matchesSearch && matchesType && matchesSite;
   });
@@ -201,6 +208,63 @@ export default function HistoricalView() {
         </div>
       </div>
 
+      {/* Multi-Site Access Scope Alert Banner */}
+      {!isSuperAdmin ? (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.825rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Lock size={16} color="var(--color-warning)" />
+            <span>
+              <strong style={{ color: "var(--color-warning)" }}>Audit Trail Terisolasi Admin Site ({currentUser?.site}):</strong> Anda hanya melihat rekaman log dan riwayat transaksi pada <strong>{currentUser?.site}</strong>. Sesuai regulasi sistem, hanya <strong>Super Admin</strong> yang dapat mengaudit seluruh site.
+            </span>
+          </div>
+          <span className="status-pill status-checked-out" style={{ fontSize: "0.72rem" }}>
+            {filteredLogs.length} Log di Site Ini
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(0, 163, 224, 0.1)",
+            border: "1px solid rgba(0, 163, 224, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Globe2 size={15} color="var(--atz-cyan)" />
+            <span>
+              <strong style={{ color: "var(--atz-cyan)" }}>Audit Trail Global Super Admin:</strong> Mengaudit seluruh riwayat transaksi di <strong>seluruh 6 site</strong> ANDRITZ (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+            </span>
+          </div>
+          <span className="status-pill status-available" style={{ fontSize: "0.72rem" }}>
+            {historical.length} Total Log Global
+          </span>
+        </div>
+      )}
+
       {/* Filter and Search Bar */}
       <div className="card" style={{ padding: "16px 20px", marginBottom: "20px" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "14px", alignItems: "center", justifyContent: "space-between" }}>
@@ -240,19 +304,40 @@ export default function HistoricalView() {
               <option value="Transfer">Transfer Antar Site</option>
             </select>
 
-            <select
-              className="form-select"
-              value={siteFilter}
-              onChange={(e) => setSiteFilter(e.target.value)}
-              style={{ width: "200px" }}
-            >
-              <option value="ALL">Semua Site</option>
-              {sites.map((s) => (
-                <option key={s.id} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            {isSuperAdmin ? (
+              <select
+                className="form-select"
+                value={siteFilter}
+                onChange={(e) => setSiteFilter(e.target.value)}
+                style={{ width: "200px" }}
+              >
+                <option value="ALL">Semua Site (Global)</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div
+                style={{
+                  height: "38px",
+                  fontSize: "0.825rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "0 12px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "rgba(245, 158, 11, 0.12)",
+                  border: "1px solid rgba(245, 158, 11, 0.4)",
+                  color: "var(--color-warning)"
+                }}
+                title={`Akses dibatasi khusus ${currentUser?.site}`}
+              >
+                <Lock size={12} />
+                <span style={{ fontWeight: 700 }}>{currentUser?.site || "Site Anda"}</span>
+              </div>
+            )}
           </div>
         </div>
 

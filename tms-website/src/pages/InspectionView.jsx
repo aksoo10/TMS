@@ -16,18 +16,24 @@ import {
   PlusCircle,
   Clock,
   Layers,
-  Award
+  Award,
+  Lock,
+  Globe2
 } from "lucide-react";
 
 export default function InspectionView() {
-  const { tools, inspections, submitInspection, currentUser, setActiveTab } = useApp();
+  const { tools, inspections, submitInspection, currentUser, setActiveTab, isSuperAdmin, isItemInUserScope } = useApp();
 
   const [activeTab, setActiveTabLocal] = useState("dashboard"); // 'dashboard', 'form', 'certificate'
   const [selectedInspectionForCert, setSelectedInspectionForCert] = useState(null);
 
+  // Scoped data according to user role
+  const scopedTools = isSuperAdmin ? tools : tools.filter((t) => isItemInUserScope(t.siteId, t.siteName));
+  const scopedInspections = isSuperAdmin ? inspections : inspections.filter((i) => isItemInUserScope(null, i.siteName));
+
   // Form state
   const [formData, setFormData] = useState({
-    toolId: tools[0]?.id || "",
+    toolId: scopedTools[0]?.id || "",
     verdict: "Pass",
     calibrationValid: true,
     findings: "Kondisi peralatan fisik dan fungsional dalam parameter prima. Telah dites tanpa beban.",
@@ -42,18 +48,18 @@ export default function InspectionView() {
     }
   });
 
-  // Calculate stats
-  const totalInspections = inspections.length;
-  const passedInspections = inspections.filter((i) => i.verdict === "Pass" || i.verdict === "Pass with Observation").length;
-  const failedInspections = inspections.filter((i) => i.verdict === "Fail" || i.verdict === "Quarantine").length;
+  // Calculate stats based on scoped inspections
+  const totalInspections = scopedInspections.length;
+  const passedInspections = scopedInspections.filter((i) => i.verdict === "Pass" || i.verdict === "Pass with Observation").length;
+  const failedInspections = scopedInspections.filter((i) => i.verdict === "Fail" || i.verdict === "Quarantine").length;
   const complianceRate = totalInspections > 0 ? Math.round((passedInspections / totalInspections) * 100) : 100;
 
-  // Tools needing inspection
-  const toolsNeedingInspection = tools.filter(
+  // Tools needing inspection (scoped)
+  const toolsNeedingInspection = scopedTools.filter(
     (t) => t.calibrationStatus === "Due Soon" || t.calibrationStatus === "Overdue" || t.status === "In Inspection"
   );
 
-  const selectedTool = tools.find((t) => t.id === formData.toolId) || tools[0];
+  const selectedTool = scopedTools.find((t) => t.id === formData.toolId) || scopedTools[0] || tools[0];
 
   const handleChecklistChange = (key, value) => {
     setFormData((prev) => ({
@@ -170,6 +176,63 @@ export default function InspectionView() {
           </button>
         </div>
       </div>
+
+      {/* Multi-Site Access Scope Alert Banner */}
+      {!isSuperAdmin ? (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.825rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Lock size={16} color="var(--color-warning)" />
+            <span>
+              <strong style={{ color: "var(--color-warning)" }}>Scope QA/QC Admin Site ({currentUser?.site}):</strong> Anda menginspeksi dan melihat kepatuhan alat khusus pada <strong>{currentUser?.site}</strong>. Sesuai regulasi sistem, hanya <strong>Super Admin</strong> yang dapat mengaudit seluruh site.
+            </span>
+          </div>
+          <span className="status-pill status-checked-out" style={{ fontSize: "0.72rem" }}>
+            {scopedTools.length} Tools di Site Ini
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(0, 163, 224, 0.1)",
+            border: "1px solid rgba(0, 163, 224, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Globe2 size={15} color="var(--atz-cyan)" />
+            <span>
+              <strong style={{ color: "var(--atz-cyan)" }}>Audit Mutu Terpusat Super Admin:</strong> Memantau kelaikan teknis & kalibrasi di seluruh 6 site ANDRITZ (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+            </span>
+          </div>
+          <span className="status-pill status-available" style={{ fontSize: "0.72rem" }}>
+            Audit Seluruh Site Aktif
+          </span>
+        </div>
+      )}
 
       {/* View: Dashboard */}
       {activeTab === "dashboard" && (
@@ -399,9 +462,9 @@ export default function InspectionView() {
                   onChange={(e) => setFormData({ ...formData, toolId: e.target.value })}
                   required
                 >
-                  {tools.map((t) => (
+                  {scopedTools.map((t) => (
                     <option key={t.id} value={t.id}>
-                      [{t.code}] {t.name} (SN: {t.serialNo} • MAT: {t.materialNo})
+                      [{t.code}] {t.name} (Site: {t.siteName || "Depot"} • SN: {t.serialNo})
                     </option>
                   ))}
                 </select>

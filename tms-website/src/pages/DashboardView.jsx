@@ -14,7 +14,9 @@ import {
   MapPin,
   Clock,
   Wrench,
-  Boxes
+  Boxes,
+  Lock,
+  Globe2
 } from "lucide-react";
 import BarcodeModal from "../components/BarcodeModal";
 
@@ -196,21 +198,38 @@ function SvgPieChart({ data, size = 190 }) {
 }
 
 export default function DashboardView() {
-  const { tools, sites, movements, inspections, setActiveTab, setSelectedSiteFilter, setGlobalSearch } = useApp();
+  const {
+    tools,
+    sites,
+    movements,
+    inspections,
+    setActiveTab,
+    setSelectedSiteFilter,
+    setGlobalSearch,
+    currentUser,
+    isSuperAdmin,
+    isItemInUserScope
+  } = useApp();
   const [selectedToolForBarcode, setSelectedToolForBarcode] = useState(null);
 
-  // Compute live statistics
-  const totalRegisteredTools = tools.length;
-  // Calculate total physical stock units (sum of stock units or items)
-  const totalPhysicalUnits = tools.reduce((sum, t) => sum + (t.stockQty || t.quantity || 1), 0);
+  // Scoped tools and movements according to user site
+  const scopedTools = isSuperAdmin ? tools : tools.filter((t) => isItemInUserScope(t.siteId, t.siteName));
+  const scopedMovements = isSuperAdmin
+    ? movements
+    : movements.filter((m) => isItemInUserScope(null, m.fromSite) || isItemInUserScope(null, m.toSite));
 
-  const availableTools = tools.filter((t) => t.status === "Available");
-  const checkedOutTools = tools.filter((t) => t.status === "Checked Out");
-  const maintenanceTools = tools.filter((t) => t.status === "Maintenance" || t.status === "Damaged");
+  // Compute live statistics
+  const totalRegisteredTools = scopedTools.length;
+  // Calculate total physical stock units (sum of stock units or items)
+  const totalPhysicalUnits = scopedTools.reduce((sum, t) => sum + (t.stockQty || t.quantity || 1), 0);
+
+  const availableTools = scopedTools.filter((t) => t.status === "Available");
+  const checkedOutTools = scopedTools.filter((t) => t.status === "Checked Out");
+  const maintenanceTools = scopedTools.filter((t) => t.status === "Maintenance" || t.status === "Damaged");
 
   // Secondary metrics
-  const totalTransactions = movements.length;
-  const returnedMovements = movements.filter((m) => m.status === "Returned");
+  const totalTransactions = scopedMovements.length;
+  const returnedMovements = scopedMovements.filter((m) => m.status === "Returned");
   const goodReturns = returnedMovements.filter(
     (m) => !m.notes?.toLowerCase().includes("damaged") && !m.notes?.toLowerCase().includes("rusak")
   ).length;
@@ -218,7 +237,7 @@ export default function DashboardView() {
   const goodReturnRate = Math.round((goodReturns / totalReturnedCount) * 100);
 
   // Needs Attention / Issues
-  const issuesCount = tools.filter(
+  const issuesCount = scopedTools.filter(
     (t) =>
       t.status === "Maintenance" ||
       t.status === "Damaged" ||
@@ -227,7 +246,9 @@ export default function DashboardView() {
       t.condition === "Damaged"
   ).length;
 
-  // Site Distribution Data for Chart 1
+  // Site Distribution Data for Chart 1:
+  // Super Admin: distribution across all 6 sites
+  // Site Admin: distribution by tool category at their site
   const siteColors = {
     "Site IKPD": "#00A3E0", // Cyan
     "Site OKI I": "#10B981", // Green
@@ -237,30 +258,39 @@ export default function DashboardView() {
     "Site IKPP": "#3B82F6" // Blue
   };
 
-  const locationChartData = sites.map((site) => {
-    const count = tools.filter(
-      (t) =>
-        t.siteId === site.id ||
-        t.siteName === site.name ||
-        (t.siteName && t.siteName.toLowerCase() === site.name.toLowerCase())
-    ).length;
-    return {
-      id: site.id,
-      label: site.name,
-      value: count,
-      color: siteColors[site.name] || "#00A3E0"
-    };
-  });
+  const catColors = ["#00A3E0", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#3B82F6"];
+
+  const locationChartData = isSuperAdmin
+    ? sites.map((site) => {
+        const count = tools.filter(
+          (t) =>
+            t.siteId === site.id ||
+            t.siteName === site.name ||
+            (t.siteName && t.siteName.toLowerCase() === site.name.toLowerCase())
+        ).length;
+        return {
+          id: site.id,
+          label: site.name,
+          value: count,
+          color: siteColors[site.name] || "#00A3E0"
+        };
+      })
+    : [...new Set(scopedTools.map((t) => t.category))].map((cat, idx) => ({
+        id: cat,
+        label: cat,
+        value: scopedTools.filter((t) => t.category === cat).length,
+        color: catColors[idx % catColors.length]
+      }));
 
   // Return Condition Data for Chart 2
-  const goodConditionCount = tools.filter((t) => t.condition === "Good" || t.status === "Available").length;
-  const brokenConditionCount = tools.filter(
+  const goodConditionCount = scopedTools.filter((t) => t.condition === "Good" || t.status === "Available").length;
+  const brokenConditionCount = scopedTools.filter(
     (t) => t.status === "Maintenance" || t.condition === "Damaged" || t.condition === "Minor Defect"
   ).length;
-  const missingConditionCount = tools.filter(
+  const missingConditionCount = scopedTools.filter(
     (t) => t.calibrationStatus === "Overdue" && t.status !== "Maintenance"
   ).length;
-  const transferredConditionCount = movements.filter((m) => m.type === "Transfer").length;
+  const transferredConditionCount = scopedMovements.filter((m) => m.type === "Transfer").length;
 
   const conditionChartData = [
     { label: "Good", value: goodConditionCount, color: "#10B981" },
@@ -270,8 +300,8 @@ export default function DashboardView() {
   ];
 
   // Recent lists
-  const recentTools = tools.slice(0, 5);
-  const recentTransactions = movements.slice(0, 5);
+  const recentTools = scopedTools.slice(0, 5);
+  const recentTransactions = scopedMovements.slice(0, 5);
 
   return (
     <div style={{ padding: "28px", maxWidth: "1600px", margin: "0 auto" }}>
@@ -281,7 +311,7 @@ export default function DashboardView() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          marginBottom: "24px",
+          marginBottom: "20px",
           flexWrap: "wrap",
           gap: "16px"
         }}
@@ -326,6 +356,63 @@ export default function DashboardView() {
           </button>
         </div>
       </div>
+
+      {/* Multi-Site Access Scope Alert Banner */}
+      {!isSuperAdmin ? (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.825rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Lock size={16} color="var(--color-warning)" />
+            <span>
+              <strong style={{ color: "var(--color-warning)" }}>Dashboard Khusus {currentUser?.role} ({currentUser?.site}):</strong> Metrik KPI, ketersediaan, dan transaksi di bawah ini khusus untuk <strong>{currentUser?.site}</strong>. Sesuai kebijakan keamanan, <strong>hanya Super Admin yang dapat melihat dan memonitor seluruh site</strong>.
+            </span>
+          </div>
+          <span className="status-pill status-checked-out" style={{ fontSize: "0.72rem" }}>
+            {scopedTools.length} Tools di Site Ini
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(0, 163, 224, 0.1)",
+            border: "1px solid rgba(0, 163, 224, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "20px",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+            flexWrap: "wrap",
+            gap: "10px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Globe2 size={15} color="var(--atz-cyan)" />
+            <span>
+              <strong style={{ color: "var(--atz-cyan)" }}>Dashboard Global Super Admin:</strong> Anda sedang memantau armada perkakas terpusat di seluruh <strong>6 site operasional ANDRITZ</strong> (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+            </span>
+          </div>
+          <span className="status-pill status-available" style={{ fontSize: "0.72rem" }}>
+            {tools.length} Total Tools (Global)
+          </span>
+        </div>
+      )}
 
       {/* Row 1: Top 4 KPI Cards */}
       <div
@@ -386,16 +473,18 @@ export default function DashboardView() {
           marginBottom: "20px"
         }}
       >
-        {/* Chart 1: Tools Distribution by Location */}
+        {/* Chart 1: Tools Distribution by Location (Super Admin) or by Category (Site Admin) */}
         <div className="card" style={{ padding: "20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>Tools Distribution by Location</h3>
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>
+              {isSuperAdmin ? "Distribusi Tools per Lokasi (6 Site)" : `Distribusi Tools di ${currentUser?.site}`}
+            </h3>
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => setActiveTab("sites-db")}
+              onClick={() => setActiveTab(isSuperAdmin ? "sites-db" : "tools-db")}
               style={{ fontSize: "0.75rem", padding: "4px 8px" }}
             >
-              Site Master <ChevronRight size={13} />
+              {isSuperAdmin ? "Site Master" : "Tools List"} <ChevronRight size={13} />
             </button>
           </div>
 
@@ -413,25 +502,21 @@ export default function DashboardView() {
               borderTop: "1px solid var(--border-subtle)"
             }}
           >
-            {sites.map((site) => {
-              const count = tools.filter(
-                (t) =>
-                  t.siteId === site.id ||
-                  t.siteName === site.name ||
-                  (t.siteName && t.siteName.toLowerCase() === site.name.toLowerCase())
-              ).length;
-              const pct = totalRegisteredTools > 0 ? Math.round((count / totalRegisteredTools) * 100) : 0;
-              const color = siteColors[site.name] || "#00A3E0";
-
+            {locationChartData.map((item) => {
+              const pct = totalRegisteredTools > 0 ? Math.round((item.value / totalRegisteredTools) * 100) : 0;
               return (
                 <div
-                  key={site.id}
+                  key={item.id}
                   onClick={() => {
-                    setSelectedSiteFilter(site.id);
-                    setGlobalSearch("");
+                    if (isSuperAdmin) {
+                      setSelectedSiteFilter(item.id);
+                      setGlobalSearch("");
+                    } else {
+                      setGlobalSearch(item.label);
+                    }
                     setActiveTab("tools-db");
                   }}
-                  title={`Klik untuk melihat ${count} tools di ${site.name}`}
+                  title={`Klik untuk melihat ${item.value} tools (${item.label})`}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -452,15 +537,15 @@ export default function DashboardView() {
                       width: "10px",
                       height: "10px",
                       borderRadius: "50%",
-                      backgroundColor: color,
+                      backgroundColor: item.color,
                       display: "inline-block",
                       flexShrink: 0
                     }}
                   />
                   <span>
-                    {site.name}{" "}
+                    {item.label}{" "}
                     <strong style={{ color: "var(--text-secondary)" }}>
-                      ({count} • {pct}%)
+                      ({item.value} • {pct}%)
                     </strong>
                   </span>
                 </div>

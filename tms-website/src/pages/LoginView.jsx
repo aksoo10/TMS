@@ -197,49 +197,122 @@ export default function LoginView() {
             </p>
           </div>
 
-          {/* Quick Role Switcher Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "24px" }}>
-            {INITIAL_USERS.map((usr) => {
-              const isSelected = selectedUser.id === usr.id;
+          {/* Quick Role Switcher */}
+          <div style={{ marginBottom: "20px" }}>
+            {/* 1. Super Admin Featured Card */}
+            {(() => {
+              const superUser = INITIAL_USERS.find((u) => u.roleSlug === "super-admin") || INITIAL_USERS[0];
+              const isSelected = selectedUser.id === superUser.id;
               return (
                 <div
-                  key={usr.id}
-                  onClick={() => setSelectedUser(usr)}
+                  key={superUser.id}
+                  onClick={() => setSelectedUser(superUser)}
                   style={{
-                    padding: "10px 12px",
+                    padding: "12px 14px",
                     borderRadius: "var(--radius-sm)",
-                    border: `1.5px solid ${isSelected ? "var(--atz-cyan)" : "var(--border-subtle)"}`,
-                    backgroundColor: isSelected ? "var(--bg-surface-active)" : "var(--bg-surface-elevated)",
+                    border: `1.5px solid ${isSelected ? "var(--atz-cyan)" : "rgba(0, 163, 224, 0.3)"}`,
+                    backgroundColor: isSelected ? "rgba(0, 163, 224, 0.15)" : "rgba(0, 163, 224, 0.05)",
                     cursor: "pointer",
-                    transition: "all var(--transition-fast)"
+                    marginBottom: "12px",
+                    transition: "all var(--transition-fast)",
+                    boxShadow: isSelected ? "0 0 16px rgba(0, 163, 224, 0.25)" : "none"
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: isSelected ? "var(--atz-cyan)" : "var(--text-primary)" }}>
-                      {usr.role}
-                    </span>
-                    {isSelected && <CheckCircle2 size={14} color="var(--atz-cyan)" />}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          backgroundColor: "#00A3E0",
+                          color: "#FFFFFF",
+                          fontSize: "0.68rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase"
+                        }}
+                      >
+                        <Globe2 size={11} /> Super Admin
+                      </span>
+                      <span style={{ fontWeight: 700, fontSize: "0.875rem", color: isSelected ? "var(--atz-cyan)" : "#FFFFFF" }}>
+                        {superUser.name}
+                      </span>
+                    </div>
+                    {isSelected && <CheckCircle2 size={16} color="var(--atz-cyan)" />}
                   </div>
-                  <div style={{ fontSize: "0.775rem", color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {usr.name}
-                  </div>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "2px" }}>
-                    {usr.site}
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                    {superUser.title} • <strong style={{ color: "var(--atz-cyan)" }}>Akses Seluruh 6 Site (Global)</strong>
                   </div>
                 </div>
               );
-            })}
+            })()}
+
+            {/* 2. Site Admins Header */}
+            <div
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                color: "var(--text-muted)",
+                marginBottom: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              <Lock size={12} color="var(--color-warning)" />
+              Admin Site Khusus (Hanya Melihat & Mengelola Site Masing-Masing):
+            </div>
+
+            {/* 3. Grid of 6 Site Admins */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+              {INITIAL_USERS.filter((u) => u.roleSlug !== "super-admin").map((usr) => {
+                const isSelected = selectedUser.id === usr.id;
+                return (
+                  <div
+                    key={usr.id}
+                    onClick={() => setSelectedUser(usr)}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "var(--radius-sm)",
+                      border: `1.5px solid ${isSelected ? "var(--atz-cyan)" : "var(--border-subtle)"}`,
+                      backgroundColor: isSelected ? "var(--bg-surface-active)" : "var(--bg-surface-elevated)",
+                      cursor: "pointer",
+                      transition: "all var(--transition-fast)"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
+                      <span style={{ fontWeight: 700, fontSize: "0.8rem", color: isSelected ? "var(--atz-cyan)" : "var(--text-primary)" }}>
+                        {usr.role}
+                      </span>
+                      {isSelected && <CheckCircle2 size={13} color="var(--atz-cyan)" />}
+                    </div>
+                    <div style={{ fontSize: "0.73rem", color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {usr.name}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "1px", display: "flex", alignItems: "center", gap: "3px" }}>
+                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: usr.badgeColor || "#10B981" }} />
+                      {usr.site}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Formal Form */}
           <form onSubmit={handleLoginSubmit}>
-            <div className="form-group">
-              <label className="form-label">
+            <div className="form-group" style={{ marginBottom: "14px" }}>
+              <label className="form-label" style={{ fontSize: "0.8rem" }}>
                 Alamat Email / ID Karyawan <span className="required">*</span>
               </label>
               <div style={{ position: "relative" }}>
                 <Mail
-                  size={16}
+                  size={15}
                   style={{
                     position: "absolute",
                     left: "12px",
@@ -251,20 +324,20 @@ export default function LoginView() {
                 <input
                   type="email"
                   className="form-control"
-                  style={{ paddingLeft: "38px" }}
+                  style={{ paddingLeft: "36px", height: "38px", fontSize: "0.85rem" }}
                   value={selectedUser.email}
                   readOnly
                 />
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">
+            <div className="form-group" style={{ marginBottom: "14px" }}>
+              <label className="form-label" style={{ fontSize: "0.8rem" }}>
                 Kata Sandi <span className="required">*</span>
               </label>
               <div style={{ position: "relative" }}>
                 <Lock
-                  size={16}
+                  size={15}
                   style={{
                     position: "absolute",
                     left: "12px",
@@ -276,15 +349,15 @@ export default function LoginView() {
                 <input
                   type="password"
                   className="form-control"
-                  style={{ paddingLeft: "38px" }}
+                  style={{ paddingLeft: "36px", height: "38px", fontSize: "0.85rem" }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "22px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.825rem", cursor: "pointer", color: "var(--text-secondary)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", cursor: "pointer", color: "var(--text-secondary)" }}>
                 <input
                   type="checkbox"
                   checked={rememberMe}
@@ -293,30 +366,38 @@ export default function LoginView() {
                 />
                 Ingat sesi saya di terminal ini
               </label>
-              <a href="#reset" onClick={(e) => e.preventDefault()} style={{ fontSize: "0.8rem", color: "var(--atz-cyan)", textDecoration: "none" }}>
+              <a href="#reset" onClick={(e) => e.preventDefault()} style={{ fontSize: "0.78rem", color: "var(--atz-cyan)", textDecoration: "none" }}>
                 Bantuan Akses?
               </a>
             </div>
 
-            <button type="submit" className="btn btn-primary btn-lg" style={{ width: "100%" }}>
+            <button type="submit" className="btn btn-primary" style={{ width: "100%", height: "42px", fontWeight: 700 }}>
               <span>Masuk Sebagai {selectedUser.role}</span>
-              <ArrowRight size={18} />
+              <ArrowRight size={17} />
             </button>
           </form>
 
           {/* Active Role Scope Information */}
           <div
             style={{
-              marginTop: "20px",
+              marginTop: "16px",
               padding: "10px 14px",
               borderRadius: "var(--radius-sm)",
-              backgroundColor: "var(--bg-surface-elevated)",
-              border: "1px solid var(--border-subtle)",
-              fontSize: "0.775rem",
+              backgroundColor: selectedUser.site === "ALL" ? "rgba(0, 163, 224, 0.1)" : "rgba(245, 158, 11, 0.1)",
+              border: `1px solid ${selectedUser.site === "ALL" ? "rgba(0, 163, 224, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+              fontSize: "0.76rem",
               color: "var(--text-secondary)"
             }}
           >
-            <strong>Hak Akses Aktif:</strong> {selectedUser.title} di <em>{selectedUser.site}</em>
+            {selectedUser.site === "ALL" ? (
+              <div>
+                <strong style={{ color: "var(--atz-cyan)" }}>🌐 Hak Akses Super Admin:</strong> Memiliki izin melihat dan mengelola inventaris di <strong>seluruh 6 site</strong> ANDRITZ (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+              </div>
+            ) : (
+              <div>
+                <strong style={{ color: "var(--color-warning)" }}>🔒 Hak Akses Admin Site:</strong> Khusus mengelola inventaris & transaksi di <strong>{selectedUser.site}</strong>. Sesuai kebijakan keamanan, hanya Super Admin yang dapat melihat seluruh site.
+              </div>
+            )}
           </div>
         </div>
       </div>
