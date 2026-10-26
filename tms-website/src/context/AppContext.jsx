@@ -156,9 +156,14 @@ export function AppProvider({ children }) {
   // Navigation tab
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  // Theme: 'dark' (Engineering Blue) or 'light' (Technical Clean)
+  // Theme: 'light' (Technical Clean White) as default, 'dark' available
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("andritz_tms_theme") || "dark";
+    const saved = localStorage.getItem("andritz_tms_theme");
+    if (!saved || saved === "dark") {
+      localStorage.setItem("andritz_tms_theme", "light");
+      return "light";
+    }
+    return saved;
   });
 
   // Global search query

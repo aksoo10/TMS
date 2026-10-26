@@ -324,7 +324,7 @@ export default function DashboardView() {
               gap: "6px",
               fontSize: "0.75rem",
               fontWeight: 700,
-              color: "var(--atz-cyan)",
+              color: "var(--atz-cyan-text, var(--atz-cyan))",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
               marginBottom: "4px"
@@ -403,9 +403,9 @@ export default function DashboardView() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Globe2 size={15} color="var(--atz-cyan)" />
+            <Globe2 size={15} color="var(--atz-cyan-text, var(--atz-cyan))" />
             <span>
-              <strong style={{ color: "var(--atz-cyan)" }}>Dashboard Global Super Admin:</strong> Anda sedang memantau armada perkakas terpusat di seluruh <strong>6 site operasional ANDRITZ</strong> (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
+              <strong style={{ color: "var(--atz-cyan-text, var(--atz-cyan))" }}>Dashboard Global Super Admin:</strong> Anda sedang memantau armada perkakas terpusat di seluruh <strong>6 site operasional ANDRITZ</strong> (OKI I, OKI II, TELL, ISC, IKPP, IKPD).
             </span>
           </div>
           <span className="status-pill status-available" style={{ fontSize: "0.72rem" }}>

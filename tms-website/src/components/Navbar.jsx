@@ -190,19 +190,38 @@ export default function Navbar() {
         {/* Notification Bell */}
         <div style={{ position: "relative" }}>
           <button
-            className="btn btn-secondary btn-icon"
             onClick={() => {
               setShowNotifDropdown(!showNotifDropdown);
               setShowRoleDropdown(false);
             }}
             title="Notifikasi & Peringatan Fleet"
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(255, 255, 255, 0.16)",
+              color: "#F1F5F9",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              position: "relative",
+              transition: "all var(--transition-fast)"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.16)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+            }}
           >
             <Bell size={17} />
             <span
               style={{
                 position: "absolute",
-                top: "4px",
-                right: "4px",
+                top: "5px",
+                right: "5px",
                 width: "8px",
                 height: "8px",
                 borderRadius: "50%",
@@ -223,7 +242,8 @@ export default function Navbar() {
                 borderRadius: "var(--radius-md)",
                 boxShadow: "var(--shadow-lg)",
                 padding: "16px",
-                zIndex: 200
+                zIndex: 200,
+                color: "var(--text-primary)"
               }}
             >
               <div
@@ -342,7 +362,8 @@ export default function Navbar() {
                 borderRadius: "var(--radius-md)",
                 boxShadow: "var(--shadow-lg)",
                 padding: "12px",
-                zIndex: 200
+                zIndex: 200,
+                color: "var(--text-primary)"
               }}
             >
               <div
@@ -429,10 +450,29 @@ export default function Navbar() {
 
         {/* Logout Button */}
         <button
-          className="btn btn-secondary btn-icon"
           onClick={logout}
           title="Keluar / Ganti Akun"
-          style={{ color: "var(--color-danger)" }}
+          style={{
+            width: "36px",
+            height: "36px",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: "rgba(255, 255, 255, 0.08)",
+            border: "1px solid rgba(255, 255, 255, 0.16)",
+            color: "var(--color-danger)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            transition: "all var(--transition-fast)"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
+            e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.4)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+            e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
+          }}
         >
           <LogOut size={16} />
         </button>

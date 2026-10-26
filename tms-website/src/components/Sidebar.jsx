@@ -175,7 +175,7 @@ export default function Sidebar() {
                 justifyContent: collapsed ? "center" : "flex-start",
                 borderRadius: "var(--radius-sm)",
                 backgroundColor: isActive ? "var(--bg-surface-active)" : "transparent",
-                color: isActive ? "var(--atz-cyan)" : "var(--text-secondary)",
+                color: isActive ? "var(--atz-cyan-text, var(--atz-cyan))" : "var(--text-secondary)",
                 border: "1px solid",
                 borderColor: isActive ? "rgba(0, 163, 224, 0.3)" : "transparent",
                 cursor: "pointer",
@@ -206,7 +206,7 @@ export default function Sidebar() {
                 />
               )}
 
-              <Icon size={19} color={isActive ? "var(--atz-cyan)" : "currentColor"} />
+              <Icon size={19} color={isActive ? "var(--atz-cyan-text, var(--atz-cyan))" : "currentColor"} />
 
               {!collapsed && (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>

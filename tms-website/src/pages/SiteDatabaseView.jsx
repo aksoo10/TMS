@@ -111,7 +111,7 @@ export default function SiteDatabaseView() {
               gap: "6px",
               fontSize: "0.75rem",
               fontWeight: 700,
-              color: "var(--atz-cyan)",
+              color: "var(--atz-cyan-text, var(--atz-cyan))",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
               marginBottom: "4px"
