@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useApp } from "../context/AppContext";
 import {
   Search,
@@ -10,7 +10,14 @@ import {
   Globe2,
   ChevronDown,
   Shield,
-  MapPin
+  MapPin,
+  CheckCheck,
+  Clock,
+  X,
+  ArrowRight,
+  ShieldCheck,
+  Wrench,
+  Tag
 } from "lucide-react";
 
 export default function Navbar() {
@@ -20,19 +27,227 @@ export default function Navbar() {
     globalSearch,
     setGlobalSearch,
     setActiveTab,
+    tools,
     movements,
     inspections,
     isSuperAdmin,
+    isItemInUserScope,
     switchRole,
-    INITIAL_USERS
+    INITIAL_USERS,
+    showToast
   } = useApp();
 
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [notifFilter, setNotifFilter] = useState("all"); // 'all' | 'critical'
 
-  // Compute urgent notifications
-  const overdueMovements = movements.filter((m) => m.status === "Active");
-  const pendingInspections = inspections.filter((i) => i.verdict === "Fail");
+  // Persistent read and dismissed notification IDs
+  const [readNotifIds, setReadNotifIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem("andritz_tms_read_notifs");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [dismissedNotifIds, setDismissedNotifIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem("andritz_tms_dismissed_notifs");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const notifRef = useRef(null);
+  const roleRef = useRef(null);
+
+  // Close dropdowns on outside click or Escape key
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setShowNotifDropdown(false);
+      }
+      if (roleRef.current && !roleRef.current.contains(e.target)) {
+        setShowRoleDropdown(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowNotifDropdown(false);
+        setShowRoleDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  // Compute live, dynamic notifications based on real asset fleet state
+  const allNotifications = useMemo(() => {
+    const list = [];
+
+    // 1. QA Inspections Fail / Quarantined
+    inspections.forEach((insp) => {
+      if (insp.verdict === "Fail") {
+        const toolObj = tools.find((t) => t.id === insp.toolId || t.code === insp.toolCode);
+        const site = insp.siteName || toolObj?.siteName;
+        if (!isSuperAdmin && !isItemInUserScope(toolObj?.siteId, site)) return;
+
+        list.push({
+          id: `notif-insp-${insp.id}`,
+          type: "qa_defect",
+          severity: "danger",
+          title: `Karantina QA: ${insp.toolCode}`,
+          message: `${insp.toolName || "Alat"} di ${site || "Site ISC"} tidak lolos uji mutu QA. ${insp.findings || "Memerlukan perbaikan segera sebelum dapat beroperasi."}`,
+          time: insp.inspectionDate ? `Inspeksi: ${insp.inspectionDate}` : "Pemeriksaan QA",
+          targetTab: "inspection",
+          targetSearch: insp.toolCode,
+          badgeText: "QA DEFECT",
+          siteName: site || "Site ISC"
+        });
+      }
+    });
+
+    // 2. Tools Maintenance / Damaged
+    tools.forEach((tool) => {
+      if (tool.status === "Maintenance" || tool.status === "Damaged" || tool.condition === "Needs Repair") {
+        if (!isSuperAdmin && !isItemInUserScope(tool.siteId, tool.siteName)) return;
+
+        const alreadyAdded = list.some((n) => n.targetSearch === tool.code && n.type === "qa_defect");
+        if (!alreadyAdded) {
+          list.push({
+            id: `notif-maint-${tool.id}`,
+            type: "maintenance",
+            severity: "danger",
+            title: `Unit Maintenance: ${tool.code}`,
+            message: `${tool.name} di ${tool.siteName} (${tool.binLocation}) berstatus ${tool.status}. Membutuhkan jadwal perbaikan teknisi.`,
+            time: `Status: ${tool.status}`,
+            targetTab: "tools-db",
+            targetSearch: tool.code,
+            badgeText: "MAINTENANCE",
+            siteName: tool.siteName
+          });
+        }
+      }
+    });
+
+    // 3. Kalibrasi Kadaluarsa (Overdue) & Jatuh Tempo Segera (Due Soon)
+    tools.forEach((tool) => {
+      if (!isSuperAdmin && !isItemInUserScope(tool.siteId, tool.siteName)) return;
+
+      if (tool.calibrationStatus === "Overdue") {
+        list.push({
+          id: `notif-cal-overdue-${tool.id}`,
+          type: "cal_overdue",
+          severity: "danger",
+          title: `Kalibrasi Expired: ${tool.code}`,
+          message: `Sertifikasi kalibrasi ${tool.name} telah kadaluarsa (${tool.nextCalibrationDate || "Lewat Waktu"}). Dilarang digunakan untuk pekerjaan berisiko tinggi.`,
+          time: `Expired: ${tool.nextCalibrationDate || "-"}`,
+          targetTab: "tools-db",
+          targetSearch: tool.code,
+          badgeText: "EXPIRED",
+          siteName: tool.siteName
+        });
+      } else if (tool.calibrationStatus === "Due Soon") {
+        list.push({
+          id: `notif-cal-duesoon-${tool.id}`,
+          type: "cal_due_soon",
+          severity: "warning",
+          title: `Jatuh Tempo Kalibrasi: ${tool.code}`,
+          message: `Perkakas presisi ${tool.name} di ${tool.siteName} wajib dijadwalkan uji kalibrasi sebelum ${tool.nextCalibrationDate}.`,
+          time: `Jatuh Tempo: ${tool.nextCalibrationDate}`,
+          targetTab: "tools-db",
+          targetSearch: tool.code,
+          badgeText: "DUE SOON",
+          siteName: tool.siteName
+        });
+      }
+    });
+
+    // 4. Peminjaman Aktif / Jatuh Tempo Pengembalian (Movements)
+    movements.forEach((mov) => {
+      if (mov.status === "Active") {
+        if (!isSuperAdmin) {
+          const matchFrom = isItemInUserScope(null, mov.fromSite);
+          const matchTo = isItemInUserScope(null, mov.toSite);
+          if (!matchFrom && !matchTo) return;
+        }
+
+        list.push({
+          id: `notif-mov-${mov.id}`,
+          type: "borrow_active",
+          severity: "warning",
+          title: `Peminjaman Aktif: ${mov.toolCode}`,
+          message: `Sedang digunakan oleh ${mov.borrowerName} (${mov.workOrder}) di ${mov.toSite}. Target kembali: ${mov.expectedReturnDate || "-"}.`,
+          time: `Target Kembali: ${mov.expectedReturnDate || "Aktif"}`,
+          targetTab: "tools-movement",
+          targetSearch: mov.toolCode,
+          badgeText: "DIPINJAM",
+          siteName: mov.toSite
+        });
+      }
+    });
+
+    // Filter out dismissed notifications
+    return list.filter((item) => !dismissedNotifIds.includes(item.id));
+  }, [tools, inspections, movements, isSuperAdmin, isItemInUserScope, dismissedNotifIds]);
+
+  const unreadCount = allNotifications.filter((n) => !readNotifIds.includes(n.id)).length;
+  const criticalCount = allNotifications.filter((n) => n.severity === "danger").length;
+
+  const displayedNotifications = useMemo(() => {
+    if (notifFilter === "critical") {
+      return allNotifications.filter((n) => n.severity === "danger");
+    }
+    return allNotifications;
+  }, [allNotifications, notifFilter]);
+
+  const markAsRead = (id) => {
+    setReadNotifIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const updated = [...prev, id];
+      localStorage.setItem("andritz_tms_read_notifs", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const markAllAsRead = () => {
+    const allIds = allNotifications.map((n) => n.id);
+    setReadNotifIds(allIds);
+    localStorage.setItem("andritz_tms_read_notifs", JSON.stringify(allIds));
+    if (showToast) {
+      showToast("Semua Dibaca", `${allNotifications.length} notifikasi ditandai sebagai sudah dibaca`, "info");
+    }
+  };
+
+  const handleDismiss = (e, id) => {
+    e.stopPropagation();
+    setDismissedNotifIds((prev) => {
+      const updated = [...prev, id];
+      localStorage.setItem("andritz_tms_dismissed_notifs", JSON.stringify(updated));
+      return updated;
+    });
+    if (showToast) {
+      showToast("Notifikasi Diarsipkan", "Peringatan telah dihapus dari daftar notifikasi", "info");
+    }
+  };
+
+  const handleNotifClick = (notif) => {
+    markAsRead(notif.id);
+    setShowNotifDropdown(false);
+    if (notif.targetSearch) {
+      setGlobalSearch(notif.targetSearch);
+    }
+    setActiveTab(notif.targetTab);
+    if (showToast) {
+      showToast(notif.title, `Membuka modul ${notif.targetTab === "inspection" ? "Inspeksi QA" : notif.targetTab === "tools-movement" ? "Tools Movement" : "Tools Database"}`, notif.severity);
+    }
+  };
 
   return (
     <header
@@ -187,21 +402,21 @@ export default function Navbar() {
           </div>
         )}
 
-        {/* Notification Bell */}
-        <div style={{ position: "relative" }}>
+        {/* Notification Bell with Dynamic Unread Badge */}
+        <div ref={notifRef} style={{ position: "relative" }}>
           <button
             onClick={() => {
               setShowNotifDropdown(!showNotifDropdown);
               setShowRoleDropdown(false);
             }}
-            title="Notifikasi & Peringatan Fleet"
+            title="Pusat Notifikasi & Peringatan Fleet"
             style={{
               width: "36px",
               height: "36px",
               borderRadius: "var(--radius-sm)",
-              backgroundColor: "rgba(255, 255, 255, 0.08)",
-              border: "1px solid rgba(255, 255, 255, 0.16)",
-              color: "#F1F5F9",
+              backgroundColor: showNotifDropdown ? "rgba(0, 163, 224, 0.22)" : "rgba(255, 255, 255, 0.08)",
+              border: showNotifDropdown ? "1px solid var(--atz-cyan)" : "1px solid rgba(255, 255, 255, 0.16)",
+              color: showNotifDropdown ? "var(--atz-cyan)" : "#F1F5F9",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -210,24 +425,38 @@ export default function Navbar() {
               transition: "all var(--transition-fast)"
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.16)";
+              if (!showNotifDropdown) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.16)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+              if (!showNotifDropdown) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
             }}
           >
             <Bell size={17} />
-            <span
-              style={{
-                position: "absolute",
-                top: "5px",
-                right: "5px",
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "var(--color-danger)"
-              }}
-            />
+            {unreadCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-4px",
+                  right: "-4px",
+                  minWidth: "18px",
+                  height: "18px",
+                  borderRadius: "9px",
+                  padding: "0 4px",
+                  background: "var(--color-danger)",
+                  color: "#FFFFFF",
+                  fontSize: "0.68rem",
+                  fontWeight: 800,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 0 8px rgba(239, 68, 68, 0.7)",
+                  border: "2px solid #000000",
+                  lineHeight: 1
+                }}
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
           {showNotifDropdown && (
@@ -236,74 +465,316 @@ export default function Navbar() {
                 position: "absolute",
                 right: 0,
                 top: "46px",
-                width: "320px",
+                width: "400px",
+                maxWidth: "90vw",
                 backgroundColor: "var(--bg-surface)",
                 border: "1px solid var(--border-medium)",
                 borderRadius: "var(--radius-md)",
                 boxShadow: "var(--shadow-lg)",
-                padding: "16px",
+                padding: "0",
+                overflow: "hidden",
                 zIndex: 200,
-                color: "var(--text-primary)"
+                color: "var(--text-primary)",
+                animation: "modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
               }}
             >
+              {/* Header */}
+              <div
+                style={{
+                  padding: "14px 16px",
+                  borderBottom: "1px solid var(--border-subtle)",
+                  backgroundColor: "var(--bg-surface-elevated)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Bell size={16} color="var(--atz-cyan)" />
+                  <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>Notifikasi Fleet ISC</span>
+                  {unreadCount > 0 && (
+                    <span
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        backgroundColor: "rgba(239, 68, 68, 0.12)",
+                        color: "var(--color-danger)",
+                        border: "1px solid rgba(239, 68, 68, 0.3)"
+                      }}
+                    >
+                      {unreadCount} Baru
+                    </span>
+                  )}
+                </div>
+
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--atz-cyan)",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background var(--transition-fast)"
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--bg-surface-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                    title="Tandai semua notifikasi sebagai sudah dibaca"
+                  >
+                    <CheckCheck size={14} />
+                    <span>Tandai Dibaca</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Tabs */}
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  padding: "8px 12px",
+                  gap: "6px",
                   borderBottom: "1px solid var(--border-subtle)",
-                  paddingBottom: "8px",
-                  marginBottom: "12px"
+                  backgroundColor: "var(--bg-surface)"
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>Notifikasi Fleet ISC</div>
-                <span className="status-pill status-checked-out" style={{ fontSize: "0.7rem" }}>
-                  {overdueMovements.length} Aktif
-                </span>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "250px", overflowY: "auto" }}>
-                {pendingInspections.length > 0 && (
-                  <div
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "6px",
-                      backgroundColor: "rgba(239, 68, 68, 0.1)",
-                      border: "1px solid rgba(239, 68, 68, 0.3)",
-                      fontSize: "0.8rem"
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, color: "var(--color-danger)", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <AlertTriangle size={14} /> 1 Tool Quarantined
-                    </div>
-                    <div style={{ color: "var(--text-secondary)", marginTop: "2px" }}>
-                      Flange Spreader ATZ-FLG-601 memerlukan perbaikan coupler.
-                    </div>
-                  </div>
-                )}
-
-                <div
+                <button
+                  onClick={() => setNotifFilter("all")}
                   style={{
-                    padding: "8px 10px",
-                    borderRadius: "6px",
-                    backgroundColor: "var(--bg-surface-elevated)",
-                    fontSize: "0.8rem"
+                    padding: "4px 10px",
+                    borderRadius: "14px",
+                    fontSize: "0.74rem",
+                    fontWeight: notifFilter === "all" ? 700 : 500,
+                    border: "none",
+                    cursor: "pointer",
+                    backgroundColor: notifFilter === "all" ? "var(--bg-surface-active)" : "transparent",
+                    color: notifFilter === "all" ? "var(--atz-cyan)" : "var(--text-muted)",
+                    transition: "all var(--transition-fast)"
                   }}
                 >
-                  <div style={{ fontWeight: 600, color: "var(--atz-cyan)", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <CheckCircle2 size={14} /> Kalibrasi Terjadwal
+                  Semua ({allNotifications.length})
+                </button>
+                <button
+                  onClick={() => setNotifFilter("critical")}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "14px",
+                    fontSize: "0.74rem",
+                    fontWeight: notifFilter === "critical" ? 700 : 500,
+                    border: "none",
+                    cursor: "pointer",
+                    backgroundColor: notifFilter === "critical" ? "rgba(239, 68, 68, 0.12)" : "transparent",
+                    color: notifFilter === "critical" ? "var(--color-danger)" : "var(--text-muted)",
+                    transition: "all var(--transition-fast)"
+                  }}
+                >
+                  Kritis / Defect ({criticalCount})
+                </button>
+              </div>
+
+              {/* Notification Items List */}
+              <div style={{ maxHeight: "330px", overflowY: "auto", padding: "8px" }}>
+                {displayedNotifications.length === 0 ? (
+                  <div style={{ padding: "34px 20px", textAlign: "center" }}>
+                    <ShieldCheck size={38} color="var(--color-success)" style={{ margin: "0 auto 8px" }} />
+                    <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--text-primary)" }}>
+                      Semua Armada Siap Operasional
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                      Tidak ada peringatan kritis atau kalibrasi kadaluarsa saat ini.
+                    </div>
                   </div>
-                  <div style={{ color: "var(--text-secondary)", marginTop: "2px" }}>
-                    Vibration Analyzer ATZ-VIB-201 jatuh tempo kalibrasi 1 Nov 2026.
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {displayedNotifications.map((notif) => {
+                      const isUnread = !readNotifIds.includes(notif.id);
+                      const isDanger = notif.severity === "danger";
+
+                      return (
+                        <div
+                          key={notif.id}
+                          onClick={() => handleNotifClick(notif)}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: "var(--radius-sm)",
+                            backgroundColor: isUnread
+                              ? (isDanger ? "rgba(239, 68, 68, 0.05)" : "var(--bg-surface-elevated)")
+                              : "transparent",
+                            border: "1px solid",
+                            borderColor: isUnread
+                              ? (isDanger ? "rgba(239, 68, 68, 0.3)" : "rgba(0, 163, 224, 0.25)")
+                              : "var(--border-subtle)",
+                            cursor: "pointer",
+                            transition: "all var(--transition-fast)",
+                            position: "relative"
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = isDanger
+                              ? "rgba(239, 68, 68, 0.1)"
+                              : "var(--bg-surface-hover)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = isUnread
+                              ? (isDanger ? "rgba(239, 68, 68, 0.05)" : "var(--bg-surface-elevated)")
+                              : "transparent";
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
+                              {/* Severity Icon */}
+                              <div
+                                style={{
+                                  width: "28px",
+                                  height: "28px",
+                                  borderRadius: "50%",
+                                  backgroundColor: isDanger ? "rgba(239, 68, 68, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0
+                                }}
+                              >
+                                {isDanger ? (
+                                  <AlertTriangle size={15} color="var(--color-danger)" />
+                                ) : (
+                                  <Clock size={15} color="var(--color-warning)" />
+                                )}
+                              </div>
+
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ fontWeight: 700, fontSize: "0.82rem", color: isDanger ? "var(--color-danger)" : "var(--text-primary)" }}>
+                                    {notif.title}
+                                  </span>
+                                  {isUnread && (
+                                    <span
+                                      style={{
+                                        width: "6px",
+                                        height: "6px",
+                                        borderRadius: "50%",
+                                        backgroundColor: "var(--atz-cyan)",
+                                        display: "inline-block",
+                                        flexShrink: 0
+                                      }}
+                                      title="Belum dibaca"
+                                    />
+                                  )}
+                                </div>
+                                <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "1px" }}>
+                                  <span style={{ fontWeight: 600 }}>{notif.siteName}</span> • <span className="font-mono">{notif.badgeText}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Dismiss X button */}
+                            <button
+                              onClick={(e) => handleDismiss(e, notif.id)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "var(--text-muted)",
+                                cursor: "pointer",
+                                padding: "4px",
+                                borderRadius: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center"
+                              }}
+                              title="Hapus / Arsipkan notifikasi"
+                              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-danger)")}
+                              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: "0.77rem",
+                              color: "var(--text-secondary)",
+                              margin: "6px 0 6px 36px",
+                              lineHeight: "1.4"
+                            }}
+                          >
+                            {notif.message}
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginLeft: "36px",
+                              fontSize: "0.7rem",
+                              color: "var(--text-muted)"
+                            }}
+                          >
+                            <span>{notif.time}</span>
+                            <span
+                              style={{
+                                color: "var(--atz-cyan)",
+                                fontWeight: 700,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px"
+                              }}
+                            >
+                              Buka modul <ArrowRight size={12} />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
+                )}
+              </div>
+
+              {/* Footer Action */}
+              <div
+                style={{
+                  padding: "10px 16px",
+                  borderTop: "1px solid var(--border-subtle)",
+                  backgroundColor: "var(--bg-surface-elevated)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setActiveTab("historical");
+                    setShowNotifDropdown(false);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--atz-cyan)",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px"
+                  }}
+                >
+                  <span>Buka Riwayat Lengkap di Historical Logs</span>
+                  <ArrowRight size={12} />
+                </button>
               </div>
             </div>
           )}
         </div>
 
         {/* Quick Role & Site Switcher Dropdown */}
-        <div style={{ position: "relative" }}>
+        <div ref={roleRef} style={{ position: "relative" }}>
           <button
             onClick={() => {
               setShowRoleDropdown(!showRoleDropdown);

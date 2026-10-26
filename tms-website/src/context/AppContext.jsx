@@ -397,6 +397,65 @@ export function AppProvider({ children }) {
     showToast("Tools Dihapus", `${target.code} dihapus dari inventaris`, "warning");
   };
 
+  const importTools = (importedList) => {
+    if (!importedList || importedList.length === 0) return 0;
+
+    let importedCount = 0;
+    setTools((prev) => {
+      const newItems = [];
+
+      importedList.forEach((raw) => {
+        const cat = raw.category || "General Fleet";
+        const catClean = cat.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase() || "GEN";
+        const autoCode = (raw.code && String(raw.code).trim()) || `ATZ-${catClean}-${Math.floor(100 + Math.random() * 899)}`;
+
+        // Match site accurately
+        const siteInput = String(raw.siteName || raw.site || raw.siteId || "").trim();
+        const matchedSite =
+          sites.find(
+            (s) =>
+              s.id?.toLowerCase() === siteInput.toLowerCase() ||
+              s.name?.toLowerCase() === siteInput.toLowerCase() ||
+              s.name?.toLowerCase().includes(siteInput.toLowerCase())
+          ) || sites[0];
+
+        const tool = {
+          id: `TOOL-${String(prev.length + newItems.length + 1).padStart(3, "0")}`,
+          code: autoCode.toUpperCase(),
+          name: raw.name || raw.toolName || "Perkakas Industri ANDRITZ",
+          category: raw.category || "General Fleet",
+          brand: raw.brand || "ANDRITZ Standard",
+          model: raw.model || "-",
+          barcode: String(raw.barcode || `8990142${Math.floor(10000 + Math.random() * 90000)}`),
+          materialNo: String(raw.materialNo || `MAT-88${Math.floor(10000 + Math.random() * 89999)}`),
+          serialNo: String(raw.serialNo || `SN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`),
+          siteId: matchedSite.id,
+          siteName: matchedSite.name,
+          binLocation: raw.binLocation || "RACK-GEN-01",
+          status: raw.status || "Available",
+          condition: raw.condition || "Good",
+          calibrationStatus: raw.calibrationStatus || "Valid",
+          lastCalibrationDate: raw.lastCalibrationDate || new Date().toISOString().substring(0, 10),
+          nextCalibrationDate: raw.nextCalibrationDate || "2027-04-30",
+          calibrationCertNo: raw.calibrationCertNo || `CERT-CAL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          lastInspectionDate: raw.lastInspectionDate || new Date().toISOString().substring(0, 10),
+          purchaseDate: raw.purchaseDate || new Date().toISOString().substring(0, 10),
+          assignedTo: raw.assignedTo || null,
+          specs: raw.specs || "-"
+        };
+
+        newItems.push(tool);
+        importedCount++;
+      });
+
+      addAuditLog("Import Excel", `${importedCount} Tools`, "Batch Import", currentUser?.site || "Site ISC", `Import massal ${importedCount} data perkakas dari spreadsheet Excel`);
+      return [...newItems, ...prev];
+    });
+
+    showToast("Import Berhasil", `${importedList.length} data perkakas berhasil diimpor ke sistem TMS`, "success");
+    return importedList.length;
+  };
+
   // Site Management Functions
   const addSite = (siteData) => {
     const newId = `SITE-${siteData.code || "NEW"}-${String(sites.length + 1).padStart(2, "0")}`;
@@ -708,6 +767,7 @@ export function AppProvider({ children }) {
         addTool,
         updateTool,
         deleteTool,
+        importTools,
         addSite,
         updateSite,
         checkOutTool,

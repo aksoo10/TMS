@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { useApp } from "../context/AppContext";
 import {
   Search,
   Filter,
   Download,
+  Upload,
   PlusCircle,
   QrCode,
   Tag,
@@ -23,7 +24,11 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Lock,
-  Globe2
+  Globe2,
+  FileUp,
+  FileCheck,
+  Info,
+  Check
 } from "lucide-react";
 import BarcodeModal from "../components/BarcodeModal";
 
@@ -33,6 +38,7 @@ export default function ToolsDatabaseView() {
     sites,
     deleteTool,
     updateTool,
+    importTools,
     setActiveTab,
     globalSearch,
     setGlobalSearch,
@@ -40,7 +46,8 @@ export default function ToolsDatabaseView() {
     selectedSiteFilter,
     setSelectedSiteFilter,
     isSuperAdmin,
-    isItemInUserScope
+    isItemInUserScope,
+    showToast
   } = useApp();
 
   const [categoryFilter, setCategoryFilter] = useState("ALL");
@@ -67,6 +74,15 @@ export default function ToolsDatabaseView() {
   const [barcodeTool, setBarcodeTool] = useState(null);
   const [detailTool, setDetailTool] = useState(null);
   const [editingTool, setEditingTool] = useState(null);
+
+  // Import Excel Modal state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFileName, setImportFileName] = useState("");
+  const [parsedTools, setParsedTools] = useState([]);
+  const [importError, setImportError] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Extract distinct categories
   const categories = ["ALL", ...new Set(tools.map((t) => t.category))];
@@ -99,6 +115,13 @@ export default function ToolsDatabaseView() {
 
   // Export to Excel (.xlsx) with clean auto-fit widths and text formatting
   const handleExportExcel = () => {
+    if (filteredTools.length === 0) {
+      if (showToast) {
+        showToast("Pemberitahuan", "Tidak ada perkakas yang sesuai filter untuk diekspor", "warning");
+      }
+      return;
+    }
+
     const exportData = filteredTools.map((t, idx) => ({
       "No": idx + 1,
       "Tool Code": t.code || "-",
@@ -151,19 +174,16 @@ export default function ToolsDatabaseView() {
     if (ws["!ref"]) {
       const range = XLSX.utils.decode_range(ws["!ref"]);
       for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-        // Material No (col 6)
         const matCell = XLSX.utils.encode_cell({ r: R, c: 6 });
         if (ws[matCell]) {
           ws[matCell].t = "s";
           ws[matCell].z = "@";
         }
-        // Barcode (col 7)
         const barcodeCell = XLSX.utils.encode_cell({ r: R, c: 7 });
         if (ws[barcodeCell]) {
           ws[barcodeCell].t = "s";
           ws[barcodeCell].z = "@";
         }
-        // Serial Number (col 8)
         const serialCell = XLSX.utils.encode_cell({ r: R, c: 8 });
         if (ws[serialCell]) {
           ws[serialCell].t = "s";
@@ -180,6 +200,216 @@ export default function ToolsDatabaseView() {
 
     const dateStr = new Date().toISOString().substring(0, 10);
     XLSX.writeFile(wb, `ANDRITZ_ISC_Tools_Database_${dateStr}.xlsx`);
+
+    if (showToast) {
+      showToast("Export Berhasil", `${filteredTools.length} perkakas berhasil diekspor ke file Excel (.xlsx)`, "success");
+    }
+  };
+
+  // Download official Excel template for Import
+  const handleDownloadTemplate = () => {
+    const templateRows = [
+      {
+        "Tool Code": "ATZ-TRQ-405",
+        "Tool Name": "Hydraulic Torque Wrench Low Profile 5,000 Nm",
+        "Category": "Hydraulic Bolting",
+        "Brand": "Enerpac",
+        "Model / Spec": "W5000X-ISC",
+        "Material No (SAP)": "8840250",
+        "Barcode": "899014280205",
+        "Serial Number": "ENP-2026-9021",
+        "Site": "Site ISC",
+        "Storage Bin": "RACK-A2-05",
+        "Status": "Available",
+        "Condition": "Good",
+        "Calibration Status": "Valid",
+        "Next Calibration": "2027-05-15",
+        "Technical Specs": "Max Torque 5,000 Nm, Hex cassette 55mm - 85mm, Working pressure 700 bar"
+      },
+      {
+        "Tool Code": "ATZ-ALN-105",
+        "Tool Name": "Precision Laser Shaft Alignment System Sensor Set",
+        "Category": "Alignment & Measurement",
+        "Brand": "Pruftechnik",
+        "Model / Spec": "ROTALIGN Ultra iS",
+        "Material No (SAP)": "8831095",
+        "Barcode": "899014280206",
+        "Serial Number": "PRF-2026-3382",
+        "Site": "Site OKI I",
+        "Storage Bin": "LAB-CAB-03",
+        "Status": "Available",
+        "Condition": "Good",
+        "Calibration Status": "Valid",
+        "Next Calibration": "2027-06-20",
+        "Technical Specs": "Continuous Sweep mode, 5-axis sensor, wireless Bluetooth communication"
+      },
+      {
+        "Tool Code": "ATZ-FLG-605",
+        "Tool Name": "Hydraulic Flange Spreader Wedge 16 Ton",
+        "Category": "Lifting & Spreading",
+        "Brand": "Equalizer",
+        "Model / Spec": "SWi16TI",
+        "Material No (SAP)": "8840620",
+        "Barcode": "899014280207",
+        "Serial Number": "EQL-2026-1140",
+        "Site": "Site TELL",
+        "Storage Bin": "RACK-B1-02",
+        "Status": "Available",
+        "Condition": "Good",
+        "Calibration Status": "Due Soon",
+        "Next Calibration": "2026-11-20",
+        "Technical Specs": "Integral hydraulic pump, 16 Ton spreading capacity, 6mm tip clearance"
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateRows);
+
+    ws["!cols"] = [
+      { wch: 18 },  // Tool Code
+      { wch: 45 },  // Tool Name
+      { wch: 25 },  // Category
+      { wch: 20 },  // Brand
+      { wch: 22 },  // Model / Spec
+      { wch: 20 },  // Material No (SAP)
+      { wch: 22 },  // Barcode
+      { wch: 22 },  // Serial Number
+      { wch: 20 },  // Site
+      { wch: 16 },  // Storage Bin
+      { wch: 16 },  // Status
+      { wch: 16 },  // Condition
+      { wch: 20 },  // Calibration Status
+      { wch: 18 },  // Next Calibration
+      { wch: 55 }   // Technical Specs
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template Import Tools");
+    XLSX.writeFile(wb, "Template_Import_Tools_ANDRITZ_ISC.xlsx");
+
+    if (showToast) {
+      showToast("Template Diunduh", "Template Excel berhasil diunduh. Silakan isi dan upload kembali.", "success");
+    }
+  };
+
+  // Parse Excel file (.xlsx, .xls, .csv)
+  const parseExcelFile = (file) => {
+    if (!file) return;
+
+    setImportLoading(true);
+    setImportError("");
+    setImportFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (!rawJson || rawJson.length === 0) {
+          setImportError("File Excel kosong atau tidak memiliki baris data perkakas yang valid.");
+          setParsedTools([]);
+          setImportLoading(false);
+          return;
+        }
+
+        const normalizeKey = (key) =>
+          String(key)
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "");
+
+        const normalizedTools = rawJson.map((row, idx) => {
+          const rowNorm = {};
+          Object.keys(row).forEach((k) => {
+            rowNorm[normalizeKey(k)] = String(row[k]).trim();
+          });
+
+          const getVal = (aliases) => {
+            for (const alias of aliases) {
+              const normAlias = normalizeKey(alias);
+              if (rowNorm[normAlias] !== undefined && rowNorm[normAlias] !== "") {
+                return rowNorm[normAlias];
+              }
+            }
+            return "";
+          };
+
+          const code = getVal(["Tool Code", "Kode Tool", "Code", "Kode"]);
+          const name = getVal(["Tool Name", "Nama Perkakas", "Nama Peralatan", "Name", "Nama", "Peralatan"]);
+          const category = getVal(["Category", "Kategori", "Cat"]) || "General Fleet";
+          const brand = getVal(["Brand", "Merk", "Manufaktur", "Manufacturer"]) || "ANDRITZ Standard";
+          const model = getVal(["Model", "Model / Spec", "Spec", "Tipe", "Type"]) || "-";
+          const materialNo = getVal(["Material No (SAP)", "Material No", "Nomor Material SAP", "Nomor Material", "SAP No", "SAP"]);
+          const barcode = getVal(["Barcode", "Barcode Label", "Nomor Barcode", "Tag Barcode", "Tag"]);
+          const serialNo = getVal(["Serial Number", "Serial No", "Nomor Serial", "SN", "S/N"]);
+          const siteName = getVal(["Current Site", "Site", "Lokasi Site", "Lokasi", "Plant"]) || (currentUser?.site || "Site ISC");
+          const binLocation = getVal(["Storage Bin", "Bin Location", "Lokasi Bin", "Rak", "Bin"]) || "RACK-GEN-01";
+          const status = getVal(["Status", "Status Alat", "Fleet Status"]) || "Available";
+          const condition = getVal(["Condition", "Kondisi", "Kondisi Fisik"]) || "Good";
+          const calibrationStatus = getVal(["Calibration Status", "Status Kalibrasi", "Kalibrasi"]) || "Valid";
+          const nextCalibrationDate = getVal(["Next Calibration", "Jatuh Tempo Kalibrasi", "Exp Kalibrasi", "Next Calibration Date"]) || "2027-04-30";
+          const specs = getVal(["Technical Specs", "Spesifikasi Teknis", "Spesifikasi", "Specs"]) || "-";
+
+          return {
+            rowNum: idx + 2,
+            code,
+            name: name || `Perkakas #${idx + 1}`,
+            category,
+            brand,
+            model,
+            materialNo,
+            barcode,
+            serialNo,
+            siteName,
+            binLocation,
+            status,
+            condition,
+            calibrationStatus,
+            nextCalibrationDate,
+            specs,
+            isValid: Boolean(name || code)
+          };
+        });
+
+        const validItems = normalizedTools.filter((t) => t.isValid);
+        if (validItems.length === 0) {
+          setImportError("Tidak ditemukan data perkakas yang valid. Pastikan kolom 'Tool Name' atau 'Kode Tool' terisi.");
+          setParsedTools([]);
+        } else {
+          setParsedTools(validItems);
+          setImportError("");
+        }
+      } catch (err) {
+        console.error("Error parsing Excel:", err);
+        setImportError("Gagal membaca file Excel. Pastikan format file adalah .xlsx, .xls, atau .csv yang valid.");
+        setParsedTools([]);
+      } finally {
+        setImportLoading(false);
+      }
+    };
+
+    reader.onerror = () => {
+      setImportError("Gagal membuka file dari komputer Anda.");
+      setImportLoading(false);
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Execute Batch Import
+  const handleExecuteImport = () => {
+    if (!parsedTools || parsedTools.length === 0) return;
+
+    if (importTools) {
+      importTools(parsedTools);
+    }
+
+    setShowImportModal(false);
+    setParsedTools([]);
+    setImportFileName("");
+    setImportError("");
   };
 
   // Export to CSV with Excel compatibility formulas to preserve text
@@ -221,7 +451,6 @@ export default function ToolsDatabaseView() {
       `"${(t.assignedTo || "").replace(/"/g, '""')}"`
     ]);
 
-    // Use UTF-8 BOM so Excel opens with proper character encoding
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -288,6 +517,7 @@ export default function ToolsDatabaseView() {
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          {/* Export Excel Button */}
           <button
             className="btn btn-secondary"
             onClick={handleExportExcel}
@@ -305,6 +535,32 @@ export default function ToolsDatabaseView() {
             <FileSpreadsheet size={16} />
             <span>Export Excel (.xlsx)</span>
           </button>
+
+          {/* Import Excel Button */}
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              setImportError("");
+              setParsedTools([]);
+              setImportFileName("");
+              setShowImportModal(true);
+            }}
+            title="Import perkakas secara masal dari file Excel (.xlsx / .csv)"
+            style={{
+              borderColor: "rgba(0, 163, 224, 0.45)",
+              color: "var(--atz-cyan-text, #0077b6)",
+              backgroundColor: "rgba(0, 163, 224, 0.08)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              fontWeight: 600
+            }}
+          >
+            <Upload size={16} />
+            <span>Import Excel (.xlsx)</span>
+          </button>
+
+          {/* Registrasi Tool Baru */}
           <button className="btn btn-primary" onClick={() => setActiveTab("tools-register")}>
             <PlusCircle size={16} />
             <span>Registrasi Tool Baru</span>
@@ -976,6 +1232,359 @@ export default function ToolsDatabaseView() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Excel Modal */}
+      {showImportModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            if (!importLoading) {
+              setShowImportModal(false);
+              setParsedTools([]);
+              setImportFileName("");
+              setImportError("");
+            }
+          }}
+        >
+          <div
+            className="modal-dialog modal-lg"
+            style={{ maxWidth: "900px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "8px",
+                    backgroundColor: "rgba(0, 163, 224, 0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--atz-cyan)"
+                  }}
+                >
+                  <FileSpreadsheet size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Import Perkakas Masal dari Excel</h3>
+                  <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    Unggah file spreadsheet (.xlsx, .xls, .csv) untuk menambahkan daftar aset perkakas sekaligus.
+                  </p>
+                </div>
+              </div>
+              <button
+                className="btn btn-secondary btn-icon"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setParsedTools([]);
+                  setImportFileName("");
+                  setImportError("");
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Template Download Card */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "12px 16px",
+                  borderRadius: "var(--radius-md)",
+                  backgroundColor: "rgba(0, 163, 224, 0.06)",
+                  border: "1px dashed rgba(0, 163, 224, 0.35)",
+                  flexWrap: "wrap",
+                  gap: "10px"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <Info size={18} color="var(--atz-cyan)" style={{ flexShrink: 0 }} />
+                  <div style={{ fontSize: "0.825rem" }}>
+                    <strong>Gunakan Template Resmi ANDRITZ:</strong> Pastikan format kolom sesuai standar agar SAP Material No, Barcode, dan Lokasi Site terpetakan dengan benar.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleDownloadTemplate}
+                  style={{
+                    fontSize: "0.8rem",
+                    padding: "6px 12px",
+                    gap: "6px",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  <Download size={14} /> Unduh Template (.xlsx)
+                </button>
+              </div>
+
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    parseExcelFile(e.dataTransfer.files[0]);
+                  }
+                }}
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                style={{
+                  border: isDragging
+                    ? "2px dashed var(--atz-cyan)"
+                    : parsedTools.length > 0
+                    ? "2px solid rgba(16, 185, 129, 0.4)"
+                    : "2px dashed var(--border-medium)",
+                  backgroundColor: isDragging
+                    ? "rgba(0, 163, 224, 0.08)"
+                    : parsedTools.length > 0
+                    ? "rgba(16, 185, 129, 0.04)"
+                    : "var(--bg-surface-elevated)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "24px 20px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: "none" }}
+                  accept=".xlsx, .xls, .csv"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      parseExcelFile(e.target.files[0]);
+                    }
+                  }}
+                />
+
+                {parsedTools.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                    <div
+                      style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "50%",
+                        backgroundColor: "rgba(16, 185, 129, 0.15)",
+                        color: "#10B981",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      <FileCheck size={28} />
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text-primary)" }}>
+                      {importFileName}
+                    </div>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "4px 10px",
+                        borderRadius: "20px",
+                        backgroundColor: "rgba(16, 185, 129, 0.12)",
+                        color: "#10B981",
+                        fontSize: "0.8rem",
+                        fontWeight: 600
+                      }}
+                    >
+                      <Check size={14} /> {parsedTools.length} Perkakas Terdeteksi Siap Diimpor
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                      Klik di sini atau seret file lain untuk mengganti file Excel
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                    <div
+                      style={{
+                        width: "50px",
+                        height: "50px",
+                        borderRadius: "50%",
+                        backgroundColor: "rgba(0, 163, 224, 0.1)",
+                        color: "var(--atz-cyan)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      <FileUp size={26} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
+                        Pilih atau Tarik & Lepas File Excel (.xlsx / .csv)
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                        Mendukung format Microsoft Excel (.xlsx, .xls) dan CSV berstandar UTF-8
+                      </div>
+                    </div>
+                    <span className="btn btn-secondary" style={{ pointerEvents: "none", marginTop: "4px", fontSize: "0.8rem" }}>
+                      Pilih Dokumen
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Error Message */}
+              {importError && (
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: "var(--radius-sm)",
+                    backgroundColor: "rgba(239, 68, 68, 0.1)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    color: "var(--color-danger)",
+                    fontSize: "0.825rem"
+                  }}
+                >
+                  <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                  <div>{importError}</div>
+                </div>
+              )}
+
+              {/* Data Preview Table */}
+              {parsedTools.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      color: "var(--text-secondary)"
+                    }}
+                  >
+                    <span>
+                      Pratinjau Data Perkakas (Menampilkan {Math.min(10, parsedTools.length)} dari {parsedTools.length} baris):
+                    </span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      Barcode & ID akan di-generate otomatis jika kosong
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      maxHeight: "220px",
+                      overflowY: "auto",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: "var(--radius-sm)",
+                      backgroundColor: "var(--bg-surface)"
+                    }}
+                  >
+                    <table className="table" style={{ margin: 0, fontSize: "0.78rem" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: "40px" }}>No</th>
+                          <th>Kode Tool</th>
+                          <th>Nama Peralatan</th>
+                          <th>Kategori</th>
+                          <th>SAP Material</th>
+                          <th>Barcode</th>
+                          <th>Site Penempatan</th>
+                          <th>Lokasi Bin</th>
+                          <th>Kalibrasi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parsedTools.slice(0, 10).map((t, idx) => (
+                          <tr key={idx}>
+                            <td className="font-mono" style={{ color: "var(--text-muted)" }}>{idx + 1}</td>
+                            <td className="font-mono" style={{ fontWeight: 600, color: "var(--atz-cyan)" }}>
+                              {t.code || <em style={{ color: "var(--text-muted)" }}>Auto</em>}
+                            </td>
+                            <td style={{ maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={t.name}>
+                              {t.name}
+                            </td>
+                            <td>{t.category}</td>
+                            <td className="font-mono">{t.materialNo || "-"}</td>
+                            <td className="font-mono">{t.barcode || <em style={{ color: "var(--text-muted)" }}>Auto 899...</em>}</td>
+                            <td>
+                              <span className="badge badge-site" style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
+                                {t.siteName}
+                              </span>
+                            </td>
+                            <td className="font-mono">{t.binLocation}</td>
+                            <td>
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 600,
+                                  color: t.calibrationStatus === "Valid" ? "var(--color-success)" : "var(--color-warning)"
+                                }}
+                              >
+                                {t.calibrationStatus}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {parsedTools.length > 10 && (
+                    <div style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      + {parsedTools.length - 10} baris perkakas lainnya akan otomatis diimpor ke sistem
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                {parsedTools.length > 0
+                  ? `Total ${parsedTools.length} aset perkakas siap ditambahkan ke database.`
+                  : "Silakan pilih file Excel untuk melanjutkan."}
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={importLoading}
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setParsedTools([]);
+                    setImportFileName("");
+                    setImportError("");
+                  }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={parsedTools.length === 0 || importLoading}
+                  onClick={handleExecuteImport}
+                  style={{ gap: "6px" }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>
+                    {importLoading ? "Memproses..." : `Proses & Simpan (${parsedTools.length} Tools)`}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
