@@ -17,8 +17,11 @@ import {
   ArrowRight,
   ShieldCheck,
   Wrench,
-  Tag
+  Tag,
+  Database,
+  Cloud
 } from "lucide-react";
+import DatabaseSyncModal from "./DatabaseSyncModal";
 
 export default function Navbar() {
   const {
@@ -34,7 +37,10 @@ export default function Navbar() {
     isItemInUserScope,
     switchRole,
     INITIAL_USERS,
-    showToast
+    showToast,
+    dbStatus,
+    isSyncModalOpen,
+    setIsSyncModalOpen
   } = useApp();
 
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -402,7 +408,49 @@ export default function Navbar() {
           </div>
         )}
 
+        {/* Database & Cloud Sync Status Badge */}
+        <button
+          onClick={() => setIsSyncModalOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "7px",
+            padding: "5px 12px",
+            borderRadius: "20px",
+            backgroundColor: dbStatus?.online ? "rgba(16, 185, 129, 0.16)" : "rgba(245, 158, 11, 0.16)",
+            border: dbStatus?.online ? "1px solid rgba(16, 185, 129, 0.45)" : "1px solid rgba(245, 158, 11, 0.45)",
+            color: "#FFFFFF",
+            cursor: "pointer",
+            fontSize: "0.74rem",
+            fontWeight: 700,
+            transition: "all var(--transition-fast)"
+          }}
+          title="Klik untuk membuka Pusat Sinkronisasi Database Localhost & Vercel"
+        >
+          <span
+            style={{
+              width: "7px",
+              height: "7px",
+              borderRadius: "50%",
+              backgroundColor: dbStatus?.online ? "#10B981" : "#F59E0B",
+              boxShadow: dbStatus?.online ? "0 0 6px #10B981" : "0 0 6px #F59E0B"
+            }}
+          />
+          {dbStatus?.online ? (
+            <>
+              <Database size={13} color="#10B981" />
+              <span>MySQL ({tools.length})</span>
+            </>
+          ) : (
+            <>
+              <Cloud size={13} color="#F59E0B" />
+              <span>Cloud / Sync ({tools.length})</span>
+            </>
+          )}
+        </button>
+
         {/* Notification Bell with Dynamic Unread Badge */}
+
         <div ref={notifRef} style={{ position: "relative" }}>
           <button
             onClick={() => {
@@ -948,6 +996,13 @@ export default function Navbar() {
           <LogOut size={16} />
         </button>
       </div>
+
+      {/* Database & Cloud Sync Modal */}
+      <DatabaseSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+      />
     </header>
   );
 }
+

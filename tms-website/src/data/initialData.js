@@ -495,8 +495,33 @@ export const INITIAL_TOOLS = [
     purchaseDate: "2025-03-15",
     assignedTo: null,
     specs: "Accuracy 0.003mm, IP42 dust/water proof, Digimatic output for SPC logging"
+  },
+  {
+    id: "TOOL-011",
+    code: "ATZ-CON-554",
+    name: "Industrial Laser Sensor Kit",
+    category: "Condition Monitoring",
+    brand: "ANDRITZ Metris Spec",
+    model: "SENS-OPT-500",
+    barcode: "899014219275",
+    materialNo: "MAT-8896311",
+    serialNo: "SN-2026-7657",
+    siteId: "SITE-ISC",
+    siteName: "Site ISC",
+    binLocation: "RACK-A1",
+    status: "Available",
+    condition: "Good",
+    calibrationStatus: "Valid",
+    lastCalibrationDate: "2026-10-26",
+    nextCalibrationDate: "2027-04-26",
+    calibrationCertNo: "CERT-CAL-2026-4634",
+    lastInspectionDate: "2026-10-26",
+    purchaseDate: "2026-10-26",
+    assignedTo: null,
+    specs: "High precision optoelectronic sensor with wireless telemetry"
   }
 ];
+
 
 export const INITIAL_MOVEMENTS = [
   {

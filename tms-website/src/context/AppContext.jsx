@@ -7,6 +7,7 @@ import {
   INITIAL_INSPECTIONS,
   INITIAL_HISTORICAL
 } from "../data/initialData";
+import { apiService } from "../services/apiService";
 
 const SITES_VERSION_KEY = "andritz_tms_sites_v4_ikpp_ikpd_oki1_oki2_tell_isc";
 
@@ -292,7 +293,143 @@ export function AppProvider({ children }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Database Connection & Sync State
+  const [dbStatus, setDbStatus] = useState({
+    online: false,
+    message: "Memeriksa koneksi database...",
+    mode: "checking"
+  });
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+
+  // Synchronize state with MySQL Database
+  const refreshFromDatabase = async () => {
+    try {
+      const conn = await apiService.checkConnection();
+      setDbStatus({
+        online: conn.connected,
+        message: conn.message,
+        mode: conn.mode,
+        database: conn.database,
+        endpoint: conn.endpoint
+      });
+
+      if (conn.connected) {
+        // Fetch tools from MySQL
+        try {
+          const dbTools = await apiService.getTools();
+          if (Array.isArray(dbTools) && dbTools.length > 0) {
+            setTools(dbTools);
+            localStorage.setItem("andritz_tms_tools", JSON.stringify(dbTools));
+          }
+        } catch (e) {
+          console.warn("[AppContext] Could not fetch tools:", e);
+        }
+
+        // Fetch movements
+        try {
+          const dbMovs = await apiService.getMovements();
+          if (Array.isArray(dbMovs) && dbMovs.length > 0) {
+            setMovements(dbMovs);
+            localStorage.setItem("andritz_tms_movements", JSON.stringify(dbMovs));
+          }
+        } catch (e) {
+          console.warn("[AppContext] Could not fetch movements:", e);
+        }
+
+        // Fetch inspections
+        try {
+          const dbInsps = await apiService.getInspections();
+          if (Array.isArray(dbInsps) && dbInsps.length > 0) {
+            setInspections(dbInsps);
+            localStorage.setItem("andritz_tms_inspections", JSON.stringify(dbInsps));
+          }
+        } catch (e) {
+          console.warn("[AppContext] Could not fetch inspections:", e);
+        }
+
+        // Fetch historical logs
+        try {
+          const dbLogs = await apiService.getHistorical();
+          if (Array.isArray(dbLogs) && dbLogs.length > 0) {
+            setHistorical(dbLogs);
+            localStorage.setItem("andritz_tms_historical", JSON.stringify(dbLogs));
+          }
+        } catch (e) {
+          console.warn("[AppContext] Could not fetch historical logs:", e);
+        }
+      }
+    } catch (err) {
+      console.warn("[AppContext] Error connecting to database:", err);
+      setDbStatus({
+        online: false,
+        message: "Mode Cloud Standalone (LocalStorage)",
+        mode: "offline"
+      });
+    }
+  };
+
+  useEffect(() => {
+    refreshFromDatabase();
+  }, []);
+
+  // Export full application state as JSON backup for migrating between Localhost and Vercel
+  const exportAllDataAsJSON = () => {
+    const payload = {
+      version: "andritz_tms_v1",
+      exportedAt: new Date().toISOString(),
+      tools,
+      sites,
+      movements,
+      inspections,
+      historical
+    };
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `andritz_tms_backup_${new Date().toISOString().substring(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Backup Selesai", "File data backup berhasil didownload", "success");
+  };
+
+  // Import full application state from JSON backup
+  const importAllDataFromJSON = (jsonString) => {
+    try {
+      const data = typeof jsonString === "string" ? JSON.parse(jsonString) : jsonString;
+      if (!data || !Array.isArray(data.tools)) {
+        return { success: false, message: "File JSON tidak valid atau tidak memiliki daftar tools." };
+      }
+
+      setTools(data.tools);
+      localStorage.setItem("andritz_tms_tools", JSON.stringify(data.tools));
+
+      if (Array.isArray(data.sites)) {
+        setSites(data.sites);
+        localStorage.setItem("andritz_tms_sites", JSON.stringify(data.sites));
+      }
+      if (Array.isArray(data.movements)) {
+        setMovements(data.movements);
+        localStorage.setItem("andritz_tms_movements", JSON.stringify(data.movements));
+      }
+      if (Array.isArray(data.inspections)) {
+        setInspections(data.inspections);
+        localStorage.setItem("andritz_tms_inspections", JSON.stringify(data.inspections));
+      }
+      if (Array.isArray(data.historical)) {
+        setHistorical(data.historical);
+        localStorage.setItem("andritz_tms_historical", JSON.stringify(data.historical));
+      }
+
+      return { success: true, toolsCount: data.tools.length };
+    } catch (err) {
+      return { success: false, message: "Format JSON error: " + err.message };
+    }
+  };
+
   // Auth Functions
+
   const login = (user) => {
     setCurrentUser(user);
     setIsAuthenticated(true);
@@ -372,6 +509,14 @@ export function AppProvider({ children }) {
     setTools((prev) => [createdTool, ...prev]);
     addAuditLog("Register", createdTool.code, createdTool.name, siteObj.name, `New tool registered under Material No ${createdTool.materialNo || "-"}`);
     showToast("Tools Terdaftar", `${createdTool.name} (${createdTool.code}) berhasil didaftarkan`, "success");
+
+    // Sync to MySQL API if online
+    if (dbStatus.online) {
+      apiService.createTool(createdTool).catch((err) => {
+        console.warn("[AppContext] Could not persist tool to MySQL:", err);
+      });
+    }
+
     return createdTool;
   };
 
@@ -387,6 +532,12 @@ export function AppProvider({ children }) {
       })
     );
     showToast("Data Diperbarui", "Informasi tools berhasil disimpan", "success");
+
+    if (dbStatus.online) {
+      apiService.updateTool(id, updatedFields).catch((err) => {
+        console.warn("[AppContext] Could not persist update to MySQL:", err);
+      });
+    }
   };
 
   const deleteTool = (id) => {
@@ -395,6 +546,12 @@ export function AppProvider({ children }) {
     setTools((prev) => prev.filter((t) => t.id !== id));
     addAuditLog("Delete", target.code, target.name, target.siteName, `Tool dinonaktifkan / dihapus dari inventaris`);
     showToast("Tools Dihapus", `${target.code} dihapus dari inventaris`, "warning");
+
+    if (dbStatus.online) {
+      apiService.deleteTool(id).catch((err) => {
+        console.warn("[AppContext] Could not delete from MySQL:", err);
+      });
+    }
   };
 
   const importTools = (importedList) => {
@@ -534,6 +691,19 @@ export function AppProvider({ children }) {
 
     addAuditLog("Check-Out", targetTool.code, targetTool.name, destSite.name, `Dipinjam oleh ${borrowerName} untuk ${newMovement.workOrder}`);
     showToast("Check-Out Berhasil", `${targetTool.code} dipinjam ke ${destSite.name}`, "success");
+
+    if (dbStatus.online) {
+      apiService.checkoutTool({
+        toolId: targetTool.id,
+        borrowerName,
+        borrowerId: borrowerId || "EMP-" + Math.floor(1000 + Math.random() * 9000),
+        destinationSiteId,
+        workOrder: workOrder || "WO-GENERAL-" + Math.floor(100 + Math.random() * 900),
+        expectedReturnDate: expectedReturnDate || "2026-11-15",
+        approvedBy: currentUser ? currentUser.name : "Supervisor",
+        notes: notes || "Peminjaman operasional site"
+      }).catch((err) => console.warn("[AppContext] Could not sync checkout to MySQL:", err));
+    }
   };
 
   const checkInTool = (movementId, returnCondition = "Good", returnNotes = "") => {
@@ -572,6 +742,12 @@ export function AppProvider({ children }) {
 
     addAuditLog("Check-In", movement.toolCode, movement.toolName, movement.toSite, `Pengembalian dikonfirmasi. Kondisi: ${returnCondition}.`);
     showToast("Check-In Berhasil", `${movement.toolCode} telah dikembalikan dan diverifikasi`, "success");
+
+    if (dbStatus.online) {
+      apiService.checkinTool(movementId, returnCondition, returnNotes).catch((err) => {
+        console.warn("[AppContext] Could not sync checkin to MySQL:", err);
+      });
+    }
   };
 
   const transferTool = ({ toolId, toSiteId, waybillNumber, notes }) => {
@@ -614,6 +790,16 @@ export function AppProvider({ children }) {
 
     addAuditLog("Transfer", targetTool.code, targetTool.name, destSite.name, `Relokasi ke ${destSite.name} via ${newTransfer.workOrder}`);
     showToast("Transfer Selesai", `${targetTool.code} dipindahkan ke ${destSite.name}`, "success");
+
+    if (dbStatus.online) {
+      apiService.transferTool({
+        toolId,
+        toSiteId,
+        waybillNumber,
+        notes,
+        borrowerName: currentUser ? currentUser.name : "Logistics Officer"
+      }).catch((err) => console.warn("[AppContext] Could not sync transfer to MySQL:", err));
+    }
   };
 
   const updateMovement = (id, updatedFields) => {
@@ -715,6 +901,13 @@ export function AppProvider({ children }) {
 
     addAuditLog("Inspection", targetTool?.code, targetTool?.name, targetTool?.siteName, `Hasil: ${newRecord.verdict}. Sertifikat: ${certNo}`);
     showToast("Inspeksi Disimpan", `Sertifikat ${certNo} diterbitkan (${newRecord.verdict})`, newRecord.verdict.includes("Pass") ? "success" : "warning");
+
+    if (dbStatus.online) {
+      apiService.createInspection(newRecord).catch((err) => {
+        console.warn("[AppContext] Could not sync inspection to MySQL:", err);
+      });
+    }
+
     return newRecord;
   };
 
@@ -776,7 +969,14 @@ export function AppProvider({ children }) {
         updateMovement,
         deleteMovement,
         submitInspection,
-        resetToDefaults
+        resetToDefaults,
+        // Database & Cloud Sync additions
+        dbStatus,
+        isSyncModalOpen,
+        setIsSyncModalOpen,
+        refreshFromDatabase,
+        exportAllDataAsJSON,
+        importAllDataFromJSON
       }}
     >
       {children}
@@ -791,3 +991,4 @@ export function useApp() {
   }
   return context;
 }
+

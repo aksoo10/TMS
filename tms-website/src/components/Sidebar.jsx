@@ -29,7 +29,9 @@ export default function Sidebar() {
     setSelectedSiteFilter,
     currentUser,
     isSuperAdmin,
-    isItemInUserScope
+    isItemInUserScope,
+    dbStatus,
+    setIsSyncModalOpen
   } = useApp();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -237,12 +239,43 @@ export default function Sidebar() {
         })}
       </nav>
 
+      {/* Database Sync Status Link */}
+      <div style={{ padding: "0 12px 10px 12px", marginTop: "auto" }}>
+        <button
+          onClick={() => setIsSyncModalOpen(true)}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: collapsed ? "10px 0" : "8px 12px",
+            justifyContent: collapsed ? "center" : "flex-start",
+            borderRadius: "var(--radius-sm)",
+            backgroundColor: dbStatus?.online ? "rgba(16, 185, 129, 0.08)" : "rgba(245, 158, 11, 0.08)",
+            border: dbStatus?.online ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid rgba(245, 158, 11, 0.25)",
+            color: dbStatus?.online ? "var(--color-success)" : "var(--color-warning)",
+            cursor: "pointer",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            transition: "all var(--transition-fast)"
+          }}
+          title={dbStatus?.online ? "Database MySQL Localhost Terhubung" : "Mode Standalone (Vercel Cloud)"}
+        >
+          <Database size={15} />
+          {!collapsed && (
+            <div style={{ textAlign: "left", lineHeight: 1.2 }}>
+              <div style={{ fontWeight: 700 }}>{dbStatus?.online ? "MySQL Online" : "Sync Database"}</div>
+              <div style={{ fontSize: "0.68rem", opacity: 0.8 }}>Localhost ↔ Vercel</div>
+            </div>
+          )}
+        </button>
+      </div>
+
       {/* Bottom Pinned Logout Button */}
       <div
         style={{
           padding: "12px",
-          borderTop: "1px solid var(--border-subtle)",
-          marginTop: "auto"
+          borderTop: "1px solid var(--border-subtle)"
         }}
       >
         <button

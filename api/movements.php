@@ -79,5 +79,78 @@ if ($method === 'GET') {
 
         $pdo->commit();
         sendResponse(['success' => true, 'message' => 'Check-out berhasil dicatat', 'id' => $movId], 201);
+    } elseif ($action === 'checkin') {
+        $movId = $input['movementId'] ?? null;
+        $returnCondition = $input['condition'] ?? 'Good';
+        $returnNotes = $input['notes'] ?? '';
+
+        if (!$movId) {
+            sendResponse(['success' => false, 'message' => 'Movement ID is required'], 400);
+        }
+
+        $mStmt = $pdo->prepare("SELECT tool_id, tool_code, tool_name, to_site, notes FROM tool_movements WHERE id = ?");
+        $mStmt->execute([$movId]);
+        $mov = $mStmt->fetch();
+
+        if (!$mov) {
+            sendResponse(['success' => false, 'message' => 'Movement not found'], 404);
+        }
+
+        $pdo->beginTransaction();
+        $updatedNotes = ($mov['notes'] ? $mov['notes'] . ' | ' : '') . "Pengembalian: " . ($returnNotes ?: 'Kondisi terverifikasi');
+        $pdo->prepare("UPDATE tool_movements SET status = 'Returned', actual_return_date = NOW(), notes = ? WHERE id = ?")
+            ->execute([$updatedNotes, $movId]);
+
+        $newStatus = ($returnCondition === 'Damaged') ? 'Maintenance' : 'Available';
+        $pdo->prepare("UPDATE tools SET status = ?, tool_condition = ?, assigned_to = NULL WHERE id = ?")
+            ->execute([$newStatus, $returnCondition, $mov['tool_id']]);
+
+        $pdo->prepare("INSERT INTO historical_logs (id, timestamp, event_type, tool_code, tool_name, user_name, site_name, details) VALUES (?, NOW(), 'Check-In', ?, ?, 'Operator', ?, ?)")
+            ->execute(['HIST-' . mt_rand(100000, 999999), $mov['tool_code'], $mov['tool_name'], $mov['to_site'], "Pengembalian tool diverifikasi. Kondisi: {$returnCondition}"]);
+
+        $pdo->commit();
+        sendResponse(['success' => true, 'message' => 'Check-in berhasil diverifikasi']);
+    } elseif ($action === 'transfer') {
+        $movId = 'MOV-TRF-' . mt_rand(1000, 9999);
+        $toolId = $input['toolId'] ?? null;
+        $toSiteId = $input['toSiteId'] ?? null;
+
+        if (!$toolId || !$toSiteId) {
+            sendResponse(['success' => false, 'message' => 'Tool ID and Destination Site ID are required'], 400);
+        }
+
+        $tStmt = $pdo->prepare("SELECT code, name, site_id FROM tools WHERE id = ?");
+        $tStmt->execute([$toolId]);
+        $tool = $tStmt->fetch();
+        if (!$tool) sendResponse(['success' => false, 'message' => 'Tool not found'], 404);
+
+        $s1 = $pdo->query("SELECT name FROM sites WHERE id = '{$tool['site_id']}'")->fetchColumn() ?: 'Site ISC';
+        $s2 = $pdo->query("SELECT name FROM sites WHERE id = '{$toSiteId}'")->fetchColumn() ?: 'Site OKI I';
+
+        $pdo->beginTransaction();
+        $ins = $pdo->prepare("
+            INSERT INTO tool_movements (
+                id, tool_id, tool_code, tool_name, movement_type, borrower_name, borrower_id,
+                from_site, to_site, work_order, checkout_date, expected_return_date, actual_return_date, status, approved_by, notes
+            ) VALUES (?, ?, ?, ?, 'Transfer', ?, 'LOG-01', ?, ?, ?, NOW(), 'N/A', NOW(), 'Returned', 'Logistics Officer', ?)
+        ");
+        $waybill = $input['waybillNumber'] ?? ('SJ-' . date('ymd') . '-' . mt_rand(100, 999));
+        $ins->execute([
+            $movId, $toolId, $tool['code'], $tool['name'],
+            $input['borrowerName'] ?? 'Logistics Officer',
+            $s1, $s2,
+            $waybill,
+            $input['notes'] ?? 'Relokasi armada antar site ISC'
+        ]);
+
+        $pdo->prepare("UPDATE tools SET site_id = ? WHERE id = ?")
+            ->execute([$toSiteId, $toolId]);
+
+        $pdo->prepare("INSERT INTO historical_logs (id, timestamp, event_type, tool_code, tool_name, user_name, site_name, details) VALUES (?, NOW(), 'Transfer', ?, ?, 'Logistics Officer', ?, ?)")
+            ->execute(['HIST-' . mt_rand(100000, 999999), $tool['code'], $tool['name'], $s2, "Relokasi ke {$s2} via {$waybill}"]);
+
+        $pdo->commit();
+        sendResponse(['success' => true, 'message' => 'Transfer berhasil dicatat', 'id' => $movId], 201);
     }
 }
+

@@ -132,4 +132,73 @@ if ($method === 'GET') {
     $histStmt->execute(['HIST-' . mt_rand(100000, 999999), $code, $input['name'], $input['siteId'] ?? 'SITE-ISC']);
 
     sendResponse(['success' => true, 'message' => 'Tool registered successfully', 'id' => $id, 'code' => $code], 201);
+} elseif ($method === 'PUT') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $id = $_GET['id'] ?? ($input['id'] ?? null);
+
+    if (!$id) {
+        sendResponse(['success' => false, 'message' => 'Tool ID is required'], 400);
+    }
+
+    $fields = [];
+    $params = [];
+
+    $allowed = [
+        'name' => 'name',
+        'category' => 'category',
+        'brand' => 'brand',
+        'model' => 'model',
+        'barcode' => 'barcode',
+        'materialNo' => 'material_no',
+        'serialNo' => 'serial_no',
+        'siteId' => 'site_id',
+        'binLocation' => 'bin_location',
+        'status' => 'status',
+        'condition' => 'tool_condition',
+        'calibrationStatus' => 'calibration_status',
+        'lastCalibrationDate' => 'last_calibration_date',
+        'nextCalibrationDate' => 'next_calibration_date',
+        'calibrationCertNo' => 'calibration_cert_no',
+        'lastInspectionDate' => 'last_inspection_date',
+        'purchaseDate' => 'purchase_date',
+        'assignedTo' => 'assigned_to',
+        'specs' => 'specs'
+    ];
+
+    foreach ($allowed as $apiKey => $dbCol) {
+        if (isset($input[$apiKey])) {
+            $fields[] = "`$dbCol` = ?";
+            $params[] = $input[$apiKey];
+        }
+    }
+
+    if (empty($fields)) {
+        sendResponse(['success' => false, 'message' => 'No fields to update'], 400);
+    }
+
+    $params[] = $id;
+    $sql = "UPDATE tools SET " . implode(", ", $fields) . " WHERE id = ?";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    sendResponse(['success' => true, 'message' => 'Tool updated successfully', 'id' => $id]);
+} elseif ($method === 'DELETE') {
+    $id = $_GET['id'] ?? null;
+    if (!$id) {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $id = $input['id'] ?? null;
+    }
+
+    if (!$id) {
+        sendResponse(['success' => false, 'message' => 'Tool ID is required'], 400);
+    }
+
+    // Delete associated movements if needed or check constraint
+    $pdo->prepare("DELETE FROM tool_movements WHERE tool_id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM inspections WHERE tool_id = ?")->execute([$id]);
+    $stmt = $pdo->prepare("DELETE FROM tools WHERE id = ?");
+    $stmt->execute([$id]);
+
+    sendResponse(['success' => true, 'message' => 'Tool deleted successfully', 'id' => $id]);
 }
+
